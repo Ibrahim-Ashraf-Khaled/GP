@@ -1,0 +1,36 @@
+{
+    "project": "Gamasa Properties Integration Test",
+    "baseUrl": "http://localhost:3000",
+    "testRunner": {
+        "headless": true,
+        "viewport": {
+            "width": 1280,
+            "height": 800
+        },
+        "timeouts": {
+            "global": 120000,
+            "navigation": 60000,
+            "action": 15000,
+            "selector": 10000
+        },
+        "retries": {
+            "mode": "on-failure",
+            "count": 2
+        }
+    },
+    "env": {
+        "NODE_ENV": "production",
+        "TEST_USER_EMAIL": "user@example.com",
+        "TEST_USER_PASS": "password123"
+    },
+    "assets": {
+        "fileUploadPaths": [
+            "/tmp/house1.jpg",
+            "/tmp/house2.jpg"
+        ]
+    },
+    "selectors": {
+        "mapContainer": ".leaflet-container, #map, [data-map]",
+        "loadingSpinner": ".spinner, .loading, [data-testid='loading']"
+    }
+}

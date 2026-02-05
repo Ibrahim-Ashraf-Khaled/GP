@@ -1,0 +1,108 @@
+{
+    "tech_stack": [
+        "TypeScript",
+        "Next.js",
+        "React",
+        "TailwindCSS",
+        "Supabase",
+        "Leaflet"
+    ],
+    "features": [
+        {
+            "name": "Home Page",
+            "description": "Main landing page of the application",
+            "files": [
+                "src/app/page.tsx"
+            ],
+            "api_doc": {}
+        },
+        {
+            "name": "Add Property",
+            "description": "Page to add new property listings",
+            "files": [
+                "src/app/add-property/page.tsx"
+            ],
+            "api_doc": {}
+        },
+        {
+            "name": "Admin Dashboard",
+            "description": "Administrative interface",
+            "files": [
+                "src/app/admin/page.tsx"
+            ],
+            "api_doc": {}
+        },
+        {
+            "name": "Authentication",
+            "description": "User login and registration and auth flows",
+            "files": [
+                "src/app/auth/page.tsx"
+            ],
+            "api_doc": {}
+        },
+        {
+            "name": "Bookings",
+            "description": "User bookings management",
+            "files": [
+                "src/app/bookings/page.tsx"
+            ],
+            "api_doc": {}
+        },
+        {
+            "name": "Favorites",
+            "description": "User favorite properties",
+            "files": [
+                "src/app/favorites/page.tsx"
+            ],
+            "api_doc": {}
+        },
+        {
+            "name": "Messages",
+            "description": "User messaging system",
+            "files": [
+                "src/app/messages/page.tsx"
+            ],
+            "api_doc": {}
+        },
+        {
+            "name": "My Properties",
+            "description": "Properties listed by the logged-in user",
+            "files": [
+                "src/app/my-properties/page.tsx"
+            ],
+            "api_doc": {}
+        },
+        {
+            "name": "Notifications",
+            "description": "User notifications",
+            "files": [
+                "src/app/notifications/page.tsx"
+            ],
+            "api_doc": {}
+        },
+        {
+            "name": "Profile",
+            "description": "User profile settings",
+            "files": [
+                "src/app/profile/page.tsx"
+            ],
+            "api_doc": {}
+        },
+        {
+            "name": "Property Details",
+            "description": "Detailed view of a specific property",
+            "files": [
+                "src/app/property/page.tsx"
+            ],
+            "api_doc": {}
+        },
+        {
+            "name": "Search",
+            "description": "Property search functionality",
+            "files": [
+                "src/app/search/page.tsx"
+            ],
+            "api_doc": {}
+        }
+    ]
+}

@@ -1,0 +1,46 @@
+import Link from 'next/link';
+import { Property } from '@/types/index'; // Adjust import based on your project structure
+
+interface PropertyContextCardProps {
+    property: any; // Using any temporarily if Property type mismatch, ideally Property
+}
+
+export const PropertyContextCard = ({ property }: PropertyContextCardProps) => {
+    if (!property) return null;
+
+    return (
+        <div className="bg-white dark:bg-zinc-800 border-b border-gray-100 dark:border-zinc-700 py-2 px-4 shadow-sm z-10">
+            <Link href={`/property/${property.id}`} className="flex items-center gap-3 group">
+                <div className="relative w-12 h-12 rounded-lg overflow-hidden shrink-0 border border-gray-100 dark:border-zinc-700">
+                    <img
+                        src={property.images?.[0] || '/placeholder-property.jpg'}
+                        alt={property.title}
+                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                    />
+                </div>
+
+                <div className="flex-1 min-w-0">
+                    <h3 className="text-sm font-bold text-gray-900 dark:text-white truncate leading-tight mb-0.5 group-hover:text-primary transition-colors">
+                        {property.title}
+                    </h3>
+                    <div className="flex items-center text-xs text-gray-500 dark:text-gray-400 gap-2">
+                        <span className="truncate flex items-center gap-0.5">
+                            <span className="material-symbols-outlined text-[14px]">location_on</span>
+                            {property.area || property.address || 'جمصة'}
+                        </span>
+                        <span className="w-1 h-1 rounded-full bg-gray-300"></span>
+                        <span className="text-primary font-bold">
+                            {property.price} {property.price_unit || property.priceUnit || 'ج.م'}
+                        </span>
+                    </div>
+                </div>
+
+                <div className="shrink-0">
+                    <span className="material-symbols-outlined text-gray-400 group-hover:text-primary rtl:rotate-180 transition-colors">
+                        chevron_left
+                    </span>
+                </div>
+            </Link>
+        </div>
+    );
+};
