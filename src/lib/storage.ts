@@ -66,6 +66,116 @@ export async function uploadImage(file: File): Promise<string> {
     }
 }
 
+// ====== دوال Mapping بين DB و App ======
+
+// تحويل Property من DB format إلى App format
+function convertPropertyFromDB(dbProperty: any): Property {
+    return {
+        id: dbProperty.id,
+        title: dbProperty.title,
+        description: dbProperty.description,
+        price: parseFloat(dbProperty.price),
+        priceUnit: dbProperty.price_unit,
+        category: dbProperty.category,
+        status: dbProperty.status,
+        images: dbProperty.images || [],
+        location: dbProperty.location,
+        ownerPhone: dbProperty.owner_phone,
+        ownerId: dbProperty.owner_id,
+        ownerName: dbProperty.owner_name,
+        features: dbProperty.features || [],
+        bedrooms: dbProperty.bedrooms,
+        bathrooms: dbProperty.bathrooms,
+        area: dbProperty.floor_area,
+        floor: dbProperty.floor_number,
+        isVerified: dbProperty.is_verified,
+        viewsCount: dbProperty.views_count || 0,
+        createdAt: dbProperty.created_at,
+        updatedAt: dbProperty.updated_at,
+        rentalConfig: dbProperty.rental_config,
+        availableDates: dbProperty.available_dates,
+    };
+}
+
+// تحويل Property من App format إلى DB format
+function convertPropertyToDB(appProperty: Partial<Property>): any {
+    return {
+        title: appProperty.title,
+        description: appProperty.description,
+        price: appProperty.price,
+        price_unit: appProperty.priceUnit,
+        category: appProperty.category,
+        status: appProperty.status,
+        images: appProperty.images || [],
+        location: appProperty.location,
+        owner_phone: appProperty.ownerPhone,
+        owner_id: appProperty.ownerId,
+        owner_name: appProperty.ownerName,
+        features: appProperty.features || [],
+        bedrooms: appProperty.bedrooms,
+        bathrooms: appProperty.bathrooms,
+        floor_area: appProperty.area,
+        floor_number: appProperty.floor,
+        is_verified: appProperty.isVerified || false,
+        views_count: appProperty.viewsCount || 0,
+        rental_config: appProperty.rentalConfig,
+        available_dates: appProperty.availableDates,
+    };
+}
+
+// دالة للحصول على العقارات من Supabase
+export async function getPropertiesFromSupabase(): Promise<Property[]> {
+    try {
+        const { data, error } = await supabase
+            .from('properties')
+            .select('*')
+            .order('created_at', { ascending: false });
+        
+        if (error) throw error;
+        
+        return data ? data.map(convertPropertyFromDB) : [];
+    } catch (error) {
+        console.error('Error fetching properties from Supabase:', error);
+        throw error;
+    }
+}
+
+// دالة للحصول على عقارات المستخدم الحالي من Supabase
+export async function getUserPropertiesFromSupabase(userId: string): Promise<Property[]> {
+    try {
+        const { data, error } = await supabase
+            .from('properties')
+            .select('*')
+            .eq('owner_id', userId)
+            .order('created_at', { ascending: false });
+        
+        if (error) throw error;
+        
+        return data ? data.map(convertPropertyFromDB) : [];
+    } catch (error) {
+        console.error('Error fetching user properties from Supabase:', error);
+        throw error;
+    }
+}
+
+// دالة للحصول على عقار واحد من Supabase
+export async function getPropertyByIdFromSupabase(id: string): Promise<Property | null> {
+    try {
+        const { data, error } = await supabase
+            .from('properties')
+            .select('*')
+            .eq('id', id)
+            .single();
+        
+        if (error) throw error;
+        
+        return data ? convertPropertyFromDB(data) : null;
+    } catch (error) {
+        console.error('Error fetching property from Supabase:', error);
+        return null;
+    }
+}
+
 // ====== العقارات ======
 
 export function getProperties(): Property[] {

@@ -6,7 +6,7 @@ import Header from '@/components/Header';
 import { BottomNav } from '@/components/BottomNav';
 import MyPropertyCard from '@/components/MyPropertyCard';
 import { Property } from '@/types';
-import { getProperties, addProperty } from '@/lib/storage'; // Removed getCurrentUser as we use useAuth
+import { getProperties, addProperty, getUserPropertiesFromSupabase } from '@/lib/storage'; // Removed getCurrentUser as we use useAuth
 import { useAuth } from '@/context/AuthContext';
 
 export default function MyPropertiesPage() {
@@ -22,13 +22,35 @@ export default function MyPropertiesPage() {
         }
     }, [user]);
 
-    const loadProperties = () => {
-        if (user) {
+    const loadProperties = async () => {
+        if (!user) {
+            setLoading(false);
+            return;
+        }
+
+        try {
+            // التحقق من المتغير للتبديل بين Mock و Real Data
+            const isMockMode = process.env.NEXT_PUBLIC_IS_MOCK_MODE === 'true';
+
+            if (isMockMode) {
+                // استخدام Mock Data من localStorage
+                const allProperties = getProperties();
+                const userProperties = allProperties.filter(p => p.ownerId === user.id);
+                setProperties(userProperties);
+            } else {
+                // استخدام Supabase
+                const userProperties = await getUserPropertiesFromSupabase(user.id);
+                setProperties(userProperties);
+            }
+        } catch (error) {
+            console.error('Error loading properties:', error);
+            // Fallback to mock data in case of error
             const allProperties = getProperties();
             const userProperties = allProperties.filter(p => p.ownerId === user.id);
             setProperties(userProperties);
+        } finally {
+            setLoading(false);
         }
-        setLoading(false);
     };
 
     const handleDelete = (id: string) => {
