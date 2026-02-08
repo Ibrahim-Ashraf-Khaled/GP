@@ -130,9 +130,9 @@ export async function getPropertiesFromSupabase(): Promise<Property[]> {
             .from('properties')
             .select('*')
             .order('created_at', { ascending: false });
-        
+
         if (error) throw error;
-        
+
         return data ? data.map(convertPropertyFromDB) : [];
     } catch (error) {
         console.error('Error fetching properties from Supabase:', error);
@@ -148,9 +148,9 @@ export async function getUserPropertiesFromSupabase(userId: string): Promise<Pro
             .select('*')
             .eq('owner_id', userId)
             .order('created_at', { ascending: false });
-        
+
         if (error) throw error;
-        
+
         return data ? data.map(convertPropertyFromDB) : [];
     } catch (error) {
         console.error('Error fetching user properties from Supabase:', error);
@@ -166,9 +166,9 @@ export async function getPropertyByIdFromSupabase(id: string): Promise<Property 
             .select('*')
             .eq('id', id)
             .single();
-        
+
         if (error) throw error;
-        
+
         return data ? convertPropertyFromDB(data) : null;
     } catch (error) {
         console.error('Error fetching property from Supabase:', error);
@@ -187,18 +187,46 @@ export function getPropertyById(id: string): Property | undefined {
     return properties.find(p => p.id === id);
 }
 
-export function addProperty(property: Omit<Property, 'id' | 'createdAt' | 'updatedAt' | 'viewsCount'>): Property {
-    const properties = getProperties();
-    const newProperty: Property = {
-        ...property,
-        id: generateId(),
-        viewsCount: 0,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-    };
-    properties.unshift(newProperty);
-    setItem(STORAGE_KEYS.PROPERTIES, properties);
-    return newProperty;
+export async function addProperty(
+    property: Omit<Property, 'id' | 'createdAt' | 'updatedAt' | 'viewsCount'>
+): Promise<Property> {
+    const isMockMode = process.env.NEXT_PUBLIC_IS_MOCK_MODE === 'true';
+
+    if (isMockMode) {
+        // Mock Mode - localStorage
+        const properties = getProperties();
+        const newProperty: Property = {
+            ...property,
+            id: generateId(),
+            viewsCount: 0,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+        };
+        properties.unshift(newProperty);
+        setItem(STORAGE_KEYS.PROPERTIES, properties);
+        return newProperty;
+    }
+
+    // Supabase Mode
+    try {
+        const dbProperty = convertPropertyToDB(property);
+
+        const { data, error } = await supabase
+            .from('properties')
+            .insert(dbProperty)
+            .select()
+            .single();
+
+        if (error) {
+            console.error('Supabase insert error:', error);
+            throw error;
+        }
+
+        return convertPropertyFromDB(data);
+    } catch (error) {
+        console.error('Error adding property to Supabase:', error);
+        throw error;
+    }
 }
 
 export function updateProperty(id: string, updates: Partial<Property>): Property | null {

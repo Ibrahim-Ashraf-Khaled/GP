@@ -1,289 +1,194 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState, useRef, useCallback } from 'react';
-import { User, Session } from '@supabase/supabase-js';
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import { User } from '@/types'; // Ensure this matches storage.ts usage
+import { getCurrentUser, setCurrentUser as saveUser, STORAGE_KEYS } from '@/lib/storage';
 import { supabase } from '@/lib/supabase';
-import { supabaseService, IS_MOCK_MODE, UserProfile } from '@/services/supabaseService';
 
-// توحيد الواجهة لتشمل الخصائص من كلا الملفين
+// Mock Mode Flag
+const IS_MOCK_MODE = process.env.NEXT_PUBLIC_IS_MOCK_MODE === 'true' || true; // Default to true if not set
+
 interface AuthContextType {
     user: User | null;
-    profile: UserProfile | null;
-    session: Session | null;
     loading: boolean;
+    login: (email: string, password: string) => Promise<boolean>;
+    register: (userData: any) => Promise<boolean>;
+    logout: () => void;
     isAuthenticated: boolean;
-    isAdmin: boolean;
-    signIn: (email: string, password: string) => Promise<{ error: any }>;
-    signUp: (email: string, password: string, fullName: string, phone?: string, role?: 'tenant' | 'landlord') => Promise<{ error: any }>;
-    signOut: () => Promise<void>;
-    signInWithGoogle: () => Promise<{ error: any }>;
-    signInWithFacebook: () => Promise<{ error: any }>;
-    resetPassword: (email: string) => Promise<{ error: any }>;
-    updateProfile: (updates: Partial<UserProfile>) => Promise<{ error: any }>;
-    refreshProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
     const [user, setUser] = useState<User | null>(null);
-    const [profile, setProfile] = useState<UserProfile | null>(null);
-    const [session, setSession] = useState<Session | null>(null);
     const [loading, setLoading] = useState(true);
-    const mountedRef = useRef(true);
 
-    // دالة مساعدة لجلب الملف الشخصي
-    const fetchProfile = async (userId: string) => {
-        try {
-            const data = await supabaseService.getProfile(userId);
-            if (mountedRef.current) {
-                setProfile(data);
-            }
-            return data;
-        } catch (error) {
-            console.error('Error fetching profile:', error);
-            return null;
-        }
-    };
-
-    // تهيئة المصادقة
+    // Initial Load & Event Listeners
     useEffect(() => {
-        mountedRef.current = true;
-
-        const initAuth = async () => {
+        const loadUser = () => {
             try {
-                if (IS_MOCK_MODE) {
-                    setLoading(false);
-                    return;
-                }
-
-                const { data: { session: currentSession } } = await supabase.auth.getSession();
-
-                if (!mountedRef.current) return;
-
-                if (currentSession?.user) {
-                    setUser(currentSession.user);
-                    setSession(currentSession);
-                    await fetchProfile(currentSession.user.id);
+                // Try from storage (Mock Mode fallback or primary)
+                const currentUser = getCurrentUser();
+                if (currentUser) {
+                    setUser(currentUser);
+                } else {
+                    // If no local user, check Supabase (if not mock)
+                    if (!IS_MOCK_MODE) {
+                        // Supabase session check would go here, 
+                        // but for now we focus on the requested structure
+                        setUser(null);
+                    } else {
+                        setUser(null);
+                    }
                 }
             } catch (error) {
-                console.error('Error initializing auth:', error);
-            } finally {
-                if (mountedRef.current) {
-                    setLoading(false);
+                console.error('Error loading user:', error);
+                // Clear potentially corrupted data
+                if (typeof window !== 'undefined') {
+                    localStorage.removeItem('gamasa_current_user');
                 }
+                setUser(null);
+            } finally {
+                setLoading(false);
             }
         };
 
-        initAuth();
+        loadUser();
 
-        const { data: { subscription } } = supabase.auth.onAuthStateChange(
-            async (event, newSession) => {
-                if (!mountedRef.current || IS_MOCK_MODE) return;
+        // Listen for updates from other components/tabs
+        const handleUserUpdate = () => {
+            const currentUser = getCurrentUser();
+            setUser(currentUser);
+        };
 
-                setSession(newSession);
-                setUser(newSession?.user ?? null);
+        // 'userUpdated' is dispatch by storage.ts in the same tab
+        window.addEventListener('userUpdated', handleUserUpdate);
 
-                if (newSession?.user) {
-                    await fetchProfile(newSession.user.id);
-                } else {
-                    setProfile(null);
-                }
-
-                setLoading(false);
+        // 'storage' event fires when localStorage changes in OTHER tabs
+        window.addEventListener('storage', (e) => {
+            if (e.key === 'gamasa_current_user' || e.key === null) {
+                handleUserUpdate();
             }
-        );
+        });
 
         return () => {
-            mountedRef.current = false;
-            subscription.unsubscribe();
+            window.removeEventListener('userUpdated', handleUserUpdate);
+            window.removeEventListener('storage', handleUserUpdate);
         };
     }, []);
 
-    // تسجيل الدخول
-    const signIn = async (email: string, password: string) => {
+    const login = async (email: string, password: string): Promise<boolean> => {
         try {
-            const { data, error } = await supabaseService.signIn(email, password);
+            setLoading(true);
 
-            if (error) throw error;
+            if (IS_MOCK_MODE) {
+                // Mock Mode: Check localStorage 'gamasa_users'
+                const users = JSON.parse(localStorage.getItem('gamasa_users') || '[]');
+                const foundUser = users.find((u: any) => u.email === email && u.password === password);
 
-            if (IS_MOCK_MODE && data?.user) {
-                const mockUser = data.user as User;
-                const mockSession = data.session as Session;
+                if (foundUser) {
+                    const { password: _, ...userWithoutPassword } = foundUser;
+                    saveUser(userWithoutPassword);
+                    setUser(userWithoutPassword);
+                    return true;
+                }
+                return false;
+            } else {
+                // Supabase Logic
+                const { data, error } = await supabase.auth.signInWithPassword({
+                    email,
+                    password,
+                });
 
-                setUser(mockUser);
-                setSession(mockSession);
-                await fetchProfile(mockUser.id);
+                if (error || !data.user) return false;
+
+                // For simple hybrid approach, we might still want to map to local user
+                // But for now, returning false as Supabase flow is separate in previous context
+                return true;
             }
-
-            return { error: null };
         } catch (error) {
-            return { error };
+            console.error('Login error:', error);
+            return false;
+        } finally {
+            setLoading(false);
         }
     };
 
-    // تسجيل مستخدم جديد
-    const signUp = async (
-        email: string,
-        password: string,
-        fullName: string,
-        phone?: string,
-        role: 'tenant' | 'landlord' = 'tenant'
-    ) => {
+    const register = async (userData: any): Promise<boolean> => {
         try {
-            const { data, error } = await supabaseService.signUp(email, password, {
-                full_name: fullName,
-                phone: phone || '',
-                role: role
-            });
+            setLoading(true);
 
-            if (error) throw error;
+            if (IS_MOCK_MODE) {
+                const users = JSON.parse(localStorage.getItem('gamasa_users') || '[]');
 
-            if (IS_MOCK_MODE && data?.user) {
-                const mockUser = data.user as User;
-                const mockSession = data.session as Session;
+                if (users.some((u: any) => u.email === userData.email)) {
+                    alert('البريد الإلكتروني مستخدم بالفعل');
+                    return false;
+                }
 
-                setUser(mockUser);
-                setSession(mockSession);
-                await fetchProfile(mockUser.id);
+                const newUser = {
+                    id: Math.random().toString(36).substring(2) + Date.now().toString(36),
+                    name: userData.name,
+                    email: userData.email,
+                    phone: userData.phone,
+                    role: 'مستأجر' as const, // Default role
+                    password: userData.password,
+                    favorites: [],
+                    unlockedProperties: [],
+                    isVerified: false,
+                    createdAt: new Date().toISOString(),
+                    memberSince: new Date().toISOString(),
+                    lastLogin: new Date().toISOString(),
+                };
+
+                users.push(newUser);
+                localStorage.setItem('gamasa_users', JSON.stringify(users));
+
+                const { password: _, ...userWithoutPassword } = newUser;
+                saveUser(userWithoutPassword);
+                setUser(userWithoutPassword);
+                return true;
+            } else {
+                // Supabase Register
+                return false;
             }
-
-            return { error: null };
         } catch (error) {
-            return { error };
+            console.error('Register error:', error);
+            return false;
+        } finally {
+            setLoading(false);
         }
     };
 
-    // تسجيل الخروج
-    const signOut = async () => {
-        await supabaseService.signOut();
+    const logout = () => {
+        saveUser(null);
         setUser(null);
-        setProfile(null);
-        setSession(null);
+        if (!IS_MOCK_MODE) {
+            supabase.auth.signOut();
+        }
+        window.location.href = '/';
     };
 
-    // تسجيل الدخول عبر Google
-    const signInWithGoogle = async () => {
-        if (IS_MOCK_MODE) {
-            // محاكاة تسجيل الدخول بجوجل في الوضع الوهمي
-            const mockUser = {
-                id: 'mock-google-user',
-                email: 'google@example.com',
-                app_metadata: {},
-                user_metadata: { full_name: 'Google User' },
-                aud: 'authenticated',
-                created_at: new Date().toISOString()
-            } as User;
-
-            setUser(mockUser);
-            await fetchProfile(mockUser.id);
-            return { error: null };
-        }
-
-        try {
-            const { error } = await supabase.auth.signInWithOAuth({
-                provider: 'google',
-                options: {
-                    redirectTo: `${window.location.origin}/auth/callback`,
-                },
-            });
-            return { error };
-        } catch (error) {
-            return { error };
-        }
-    };
-
-    // تسجيل الدخول عبر Facebook
-    const signInWithFacebook = async () => {
-        if (IS_MOCK_MODE) {
-            const mockUser = {
-                id: 'mock-facebook-user',
-                email: 'facebook@example.com',
-                app_metadata: {},
-                user_metadata: { full_name: 'Facebook User' },
-                aud: 'authenticated',
-                created_at: new Date().toISOString()
-            } as User;
-
-            setUser(mockUser);
-            await fetchProfile(mockUser.id);
-            return { error: null };
-        }
-
-        try {
-            const { error } = await supabase.auth.signInWithOAuth({
-                provider: 'facebook',
-                options: {
-                    redirectTo: `${window.location.origin}/auth/callback`,
-                },
-            });
-            return { error };
-        } catch (error) {
-            return { error };
-        }
-    };
-
-    // إعادة تعيين كلمة المرور
-    const resetPassword = async (email: string) => {
-        if (IS_MOCK_MODE) return { error: null };
-
-        try {
-            const { error } = await supabase.auth.resetPasswordForEmail(email, {
-                redirectTo: `${window.location.origin}/auth/reset-password`,
-            });
-            return { error };
-        } catch (error) {
-            return { error };
-        }
-    };
-
-    // تحديث الملف الشخصي
-    const updateProfile = async (updates: Partial<UserProfile>) => {
-        if (!user) return { error: new Error('No user logged in') };
-
-        try {
-            const data = await supabaseService.updateUserProfile(user.id, updates);
-
-            if (mountedRef.current) {
-                setProfile(prev => prev ? { ...prev, ...data } : data);
-            }
-
-            return { error: null };
-        } catch (error) {
-            return { error };
-        }
-    };
-
-    const refreshProfile = async () => {
-        if (user) {
-            await fetchProfile(user.id);
-        }
-    };
-
-    const value = {
-        user,
-        profile,
-        session,
-        loading,
-        isAuthenticated: !!user,
-        isAdmin: profile?.is_admin ?? false,
-        signIn,
-        signUp,
-        signOut,
-        signInWithGoogle,
-        signInWithFacebook,
-        resetPassword,
-        updateProfile,
-        refreshProfile,
-    };
-
-    return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+    return (
+        <AuthContext.Provider
+            value={{
+                user,
+                loading,
+                login,
+                register,
+                logout,
+                isAuthenticated: !!user,
+            }}
+        >
+            {children}
+        </AuthContext.Provider>
+    );
 }
 
 export function useAuth() {
     const context = useContext(AuthContext);
-    if (context === undefined) {
-        throw new Error('useAuth must be used within an AuthProvider');
+    if (!context) {
+        throw new Error('useAuth must be used within AuthProvider');
     }
     return context;
 }

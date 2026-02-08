@@ -8,9 +8,10 @@ import MyPropertyCard from '@/components/MyPropertyCard';
 import { Property } from '@/types';
 import { getProperties, addProperty, getUserPropertiesFromSupabase } from '@/lib/storage'; // Removed getCurrentUser as we use useAuth
 import { useAuth } from '@/context/AuthContext';
+import ProtectedRoute from '@/components/ProtectedRoute';
 
 export default function MyPropertiesPage() {
-    const { user, profile } = useAuth();
+    const { user } = useAuth();
     const [properties, setProperties] = useState<Property[]>([]);
     const [loading, setLoading] = useState(true);
 
@@ -102,9 +103,9 @@ export default function MyPropertiesPage() {
                 status: 'متاح',
                 images: ['/images/property1.jpg'],
                 location: { lat: 31.44, lng: 31.53, address: 'جمصة', area: 'منطقة البحر' },
-                ownerPhone: profile?.phone || '01000000000',
+                ownerPhone: user?.phone || '01000000000',
                 ownerId: user.id,
-                ownerName: profile?.full_name || 'مستخدم تجريبي',
+                ownerName: user?.name || 'مستخدم تجريبي',
                 features: ['تكييف', 'واي فاي'],
                 bedrooms: 2,
                 bathrooms: 1,
@@ -121,9 +122,9 @@ export default function MyPropertiesPage() {
                 status: 'متاح',
                 images: ['/images/property5.jpg'],
                 location: { lat: 31.44, lng: 31.53, address: 'جمصة', area: 'منطقة البحر' },
-                ownerPhone: profile?.phone || '01000000000',
+                ownerPhone: user?.phone || '01000000000',
                 ownerId: user.id,
-                ownerName: profile?.full_name || 'مستخدم تجريبي',
+                ownerName: user?.name || 'مستخدم تجريبي',
                 features: ['تكييف', 'بحر'],
                 bedrooms: 3,
                 bathrooms: 2,
@@ -139,69 +140,71 @@ export default function MyPropertiesPage() {
     };
 
     return (
-        <div className="min-h-screen bg-gray-50 dark:bg-black pb-24">
-            <Header />
+        <ProtectedRoute>
+            <div className="min-h-screen bg-gray-50 dark:bg-black pb-24">
+                <Header />
 
-            <div className="max-w-5xl mx-auto px-4 py-8">
-                <div className="flex items-center justify-between mb-8">
-                    <div className="flex items-center gap-3">
-                        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">عقاراتي</h1>
-                        <span className="bg-blue-500/10 text-blue-500 text-sm font-bold px-3 py-1 rounded-full">{properties.length}</span>
+                <div className="max-w-5xl mx-auto px-4 py-8">
+                    <div className="flex items-center justify-between mb-8">
+                        <div className="flex items-center gap-3">
+                            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">عقاراتي</h1>
+                            <span className="bg-blue-500/10 text-blue-500 text-sm font-bold px-3 py-1 rounded-full">{properties.length}</span>
+                        </div>
+                        <div className="flex gap-2">
+                            <button
+                                onClick={handleAddMockData}
+                                className="flex items-center gap-2 px-4 py-3 bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-gray-300 font-bold rounded-xl hover:bg-gray-200 dark:hover:bg-zinc-700 transition-all text-sm"
+                            >
+                                <span className="material-symbols-outlined text-[20px]">data_check</span>
+                                <span>إضافة بيانات تجريبية</span>
+                            </button>
+                            <Link
+                                href="/add-property"
+                                className="flex items-center gap-2 px-6 py-3 bg-primary text-white font-bold rounded-xl hover:bg-primary/90 transition-all shadow-lg shadow-primary/20"
+                            >
+                                <span className="material-symbols-outlined">add_circle</span>
+                                <span>إضافة عقار</span>
+                            </Link>
+                        </div>
                     </div>
-                    <div className="flex gap-2">
-                        <button
-                            onClick={handleAddMockData}
-                            className="flex items-center gap-2 px-4 py-3 bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-gray-300 font-bold rounded-xl hover:bg-gray-200 dark:hover:bg-zinc-700 transition-all text-sm"
-                        >
-                            <span className="material-symbols-outlined text-[20px]">data_check</span>
-                            <span>إضافة بيانات تجريبية</span>
-                        </button>
-                        <Link
-                            href="/add-property"
-                            className="flex items-center gap-2 px-6 py-3 bg-primary text-white font-bold rounded-xl hover:bg-primary/90 transition-all shadow-lg shadow-primary/20"
-                        >
-                            <span className="material-symbols-outlined">add_circle</span>
-                            <span>إضافة عقار</span>
-                        </Link>
-                    </div>
+
+                    {loading ? (
+                        <div className="flex flex-col gap-4">
+                            {[1, 2, 3].map(i => (
+                                <div key={i} className="h-40 bg-gray-200 dark:bg-zinc-800 rounded-2xl animate-pulse" />
+                            ))}
+                        </div>
+                    ) : properties.length > 0 ? (
+                        <div className="flex flex-col gap-4">
+                            {properties.map(property => (
+                                <MyPropertyCard
+                                    key={property.id}
+                                    property={property}
+                                    onDelete={handleDelete}
+                                />
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="text-center py-20 bg-white dark:bg-white/5 backdrop-blur-sm rounded-[2.5rem] border-2 border-dashed border-gray-200 dark:border-gray-800">
+                            <div className="w-20 h-20 bg-blue-50 dark:bg-blue-900/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <span className="material-symbols-outlined text-4xl text-blue-400">home_work</span>
+                            </div>
+                            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">لا توجد عقارات مضافة</h3>
+                            <p className="text-gray-500 dark:text-gray-400 text-sm mb-6">
+                                لم تقم بإضافة أي عقارات حتى الآن. ابدأ بإضافة عقارك الأول!
+                            </p>
+                            <Link
+                                href="/add-property"
+                                className="text-primary font-bold hover:underline"
+                            >
+                                إضافة عقار جديد
+                            </Link>
+                        </div>
+                    )}
                 </div>
 
-                {loading ? (
-                    <div className="flex flex-col gap-4">
-                        {[1, 2, 3].map(i => (
-                            <div key={i} className="h-40 bg-gray-200 dark:bg-zinc-800 rounded-2xl animate-pulse" />
-                        ))}
-                    </div>
-                ) : properties.length > 0 ? (
-                    <div className="flex flex-col gap-4">
-                        {properties.map(property => (
-                            <MyPropertyCard
-                                key={property.id}
-                                property={property}
-                                onDelete={handleDelete}
-                            />
-                        ))}
-                    </div>
-                ) : (
-                    <div className="text-center py-20 bg-white dark:bg-white/5 backdrop-blur-sm rounded-[2.5rem] border-2 border-dashed border-gray-200 dark:border-gray-800">
-                        <div className="w-20 h-20 bg-blue-50 dark:bg-blue-900/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                            <span className="material-symbols-outlined text-4xl text-blue-400">home_work</span>
-                        </div>
-                        <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">لا توجد عقارات مضافة</h3>
-                        <p className="text-gray-500 dark:text-gray-400 text-sm mb-6">
-                            لم تقم بإضافة أي عقارات حتى الآن. ابدأ بإضافة عقارك الأول!
-                        </p>
-                        <Link
-                            href="/add-property"
-                            className="text-primary font-bold hover:underline"
-                        >
-                            إضافة عقار جديد
-                        </Link>
-                    </div>
-                )}
+                <BottomNav />
             </div>
-
-            <BottomNav />
-        </div>
+        </ProtectedRoute>
     );
 }

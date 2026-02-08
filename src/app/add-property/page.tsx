@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Navbar from '@/components/Navbar';
+import ProtectedRoute from '@/components/ProtectedRoute';
 import { AREAS, FEATURES, PropertyCategory } from '@/types';
 import { addProperty, getCurrentUser, addNotification, uploadImage } from '@/lib/storage';
 
@@ -84,18 +85,32 @@ export default function AddPropertyPage() {
 
     const handleSubmit = async () => {
         setLoading(true);
+        setValidationErrors([]);
 
         try {
             const user = getCurrentUser();
 
-            const newProperty = addProperty({
+            if (!user) {
+                alert('يجب تسجيل الدخول أولاً');
+                return;
+            }
+
+            // التحقق من وجود صور
+            if (images.length === 0) {
+                alert('يرجى إضافة صورة واحدة على الأقل');
+                setLoading(false);
+                return;
+            }
+
+            // تجهيز العقار (الصور مرفوعة بالفعل)
+            const propertyToAdd = {
                 title: formData.title,
                 description: formData.description,
                 price: Number(formData.price),
                 priceUnit: formData.priceUnit,
                 category: formData.category,
-                status: 'متاح',
-                images: images,
+                status: 'متاح' as const,
+                images: images, // الصور المرفوعة من handleImageUpload
                 location: {
                     lat: 31.4431,
                     lng: 31.5344,
@@ -103,7 +118,7 @@ export default function AddPropertyPage() {
                     area: formData.selectedArea,
                 },
                 ownerPhone: formData.ownerPhone,
-                ownerId: user?.id || 'guest',
+                ownerId: user.id,
                 ownerName: formData.ownerName,
                 features: formData.features,
                 bedrooms: formData.bedrooms,
@@ -111,22 +126,30 @@ export default function AddPropertyPage() {
                 area: Number(formData.area),
                 floor: formData.floor,
                 isVerified: false,
+            };
+
+            // حفظ العقار
+            const newProperty = await addProperty(propertyToAdd);
+
+            // إضافة إشعار
+            addNotification({
+                userId: user.id,
+                title: 'تم إضافة عقارك بنجاح!',
+                message: `عقارك "${formData.title}" قيد المراجعة من الإدارة.`,
+                type: 'success',
+                link: `/property/${newProperty.id}`,
             });
 
-            // إضافة إشعار للمستخدم
-            if (user) {
-                addNotification({
-                    userId: user.id,
-                    title: 'تم إضافة عقارك بنجاح!',
-                    message: `عقارك "${formData.title}" قيد المراجعة من الإدارة.`,
-                    type: 'success',
-                    link: `/property/${newProperty.id}`,
-                });
-            }
-
             setSuccess(true);
+
+            // Redirect بعد 2 ثانية
+            setTimeout(() => {
+                window.location.href = '/my-properties';
+            }, 2000);
+
         } catch (error) {
             console.error('Error adding property:', error);
+            alert('حدث خطأ أثناء إضافة العقار. يرجى المحاولة مرة أخرى.');
         } finally {
             setLoading(false);
         }
@@ -376,62 +399,6 @@ export default function AddPropertyPage() {
                                 />
                             </div>
 
-                            {/* Counter Inputs */}
-                            <div className="grid grid-cols-1 gap-4 bg-gray-50 dark:bg-zinc-800 p-4 rounded-2xl">
-                                {[
-                                    { label: 'غرف النوم', key: 'bedrooms', icon: 'bed' },
-                                    { label: 'الحمامات', key: 'bathrooms', icon: 'bathtub' },
-                                    { label: 'الطابق', key: 'floor', icon: 'stairs' },
-                                ].map((item: any) => (
-                                    <div key={item.key} className="flex items-center justify-between">
-                                        <div className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
-                                            <span className="material-symbols-outlined text-gray-400">{item.icon}</span>
-                                            <span className="font-bold">{item.label}</span>
-                                        </div>
-                                        <div className="flex items-center gap-3 bg-white dark:bg-zinc-900 rounded-xl p-1 shadow-sm">
-                                            <button
-                                                onClick={() => setFormData(prev => ({ ...prev, [item.key]: Math.max(0, (prev as any)[item.key] - 1) }))}
-                                                className="size-8 rounded-lg bg-gray-100 dark:bg-zinc-800 hover:bg-gray-200 dark:hover:bg-zinc-700 flex items-center justify-center transition-colors"
-                                            >
-                                                <span className="material-symbols-outlined text-sm">remove</span>
-                                            </button>
-                                            <span className="w-6 text-center font-bold">{String((formData as any)[item.key])}</span>
-                                            <button
-                                                onClick={() => setFormData(prev => ({ ...prev, [item.key]: (prev as any)[item.key] + 1 }))}
-                                                className="size-8 rounded-lg bg-primary text-white hover:bg-primary/90 flex items-center justify-center transition-colors"
-                                            >
-                                                <span className="material-symbols-outlined text-sm">add</span>
-                                            </button>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-
-                            <InputField
-                                label="المساحة (م²)"
-                                type="number"
-                                placeholder="120"
-                                value={formData.area}
-                                onChange={(e: any) => setFormData({ ...formData, area: e.target.value })}
-                            />
-
-                            <div className="space-y-3">
-                                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300">المميزات</label>
-                                <div className="flex flex-wrap gap-2">
-                                    {FEATURES.map(feature => (
-                                        <button
-                                            key={feature}
-                                            onClick={() => toggleFeature(feature)}
-                                            className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${formData.features.includes(feature)
-                                                ? 'bg-primary text-white shadow-lg shadow-primary/20'
-                                                : 'bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-zinc-700'
-                                                }`}
-                                        >
-                                            {feature}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
                         </div>
                     )}
 
@@ -476,7 +443,6 @@ export default function AddPropertyPage() {
                         </div>
                     )}
 
-                    {/* Step 4: Contact */}
                     {step === 4 && (
                         <div className="space-y-6 animate-fadeIn">
                             <div className="text-center mb-8">
@@ -526,7 +492,6 @@ export default function AddPropertyPage() {
                             </div>
                         </div>
                     )}
-
                 </div>
             </section>
 
