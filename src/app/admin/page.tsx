@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { supabaseService, PropertyRow } from '@/services/supabaseService';
 import { GlassCard } from '@/components/ui/glass';
+import { PRICE_UNIT_AR } from '@/types';
 
 interface Stats {
     pendingProperties: number;
@@ -127,7 +128,7 @@ export default function AdminDashboard() {
                                 </div>
                                 <div className="flex-1 min-w-0">
                                     <h3 className="font-medium text-gray-900 dark:text-white truncate">{prop.title}</h3>
-                                    <p className="text-sm text-gray-500">{prop.price} ج.م / {prop.price_unit}</p>
+                                    <p className="text-sm text-gray-500">{prop.price} ج.م / {PRICE_UNIT_AR[prop.price_unit as keyof typeof PRICE_UNIT_AR] ?? prop.price_unit}</p>
                                 </div>
                                 <span className="px-2 py-1 rounded-full bg-amber-500/20 text-amber-500 text-xs font-medium">
                                     معلق

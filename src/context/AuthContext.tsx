@@ -6,7 +6,7 @@ import { getCurrentUser, setCurrentUser as saveUser, STORAGE_KEYS } from '@/lib/
 import { supabase } from '@/lib/supabase';
 
 // Mock Mode Flag
-const IS_MOCK_MODE = process.env.NEXT_PUBLIC_IS_MOCK_MODE === 'true' || true; // Default to true if not set
+const IS_MOCK_MODE = process.env.NEXT_PUBLIC_IS_MOCK_MODE === 'true';
 
 interface AuthContextType {
     user: User | null;

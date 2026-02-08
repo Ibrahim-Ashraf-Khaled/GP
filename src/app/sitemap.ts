@@ -6,7 +6,7 @@ const BASE_URL = 'https://gamasa-properties.vercel.app';
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // 1. Fetch only "available" properties
     // Note: We use getProperties filter to ensure we actially have this method
-    const properties = await supabaseService.getProperties({ status: 'متاح' });
+    const properties = await supabaseService.getProperties({ status: 'available' });
 
     // 2. Generate dynamic property URLs
     const propertyUrls = properties.map((prop) => ({

@@ -1,7 +1,10 @@
-// أنواع البيانات الأساسية للمنصة
+// أنواع البيانات الأساسية للمنصة (English values for schema/API; use CATEGORY_AR, STATUS_AR for UI)
 
-export type PropertyCategory = 'شقة' | 'غرفة' | 'استوديو' | 'فيلا' | 'شاليه';
-export type PropertyStatus = 'متاح' | 'محجوز' | 'مؤجر';
+import type { PropertyCategory, PropertyStatus, PriceUnit } from './database.types';
+
+export type { PropertyCategory, PropertyStatus, PriceUnit } from './database.types';
+export { CATEGORY_AR, PRICE_UNIT_AR, STATUS_AR } from './database.types';
+
 export type UserRole = 'مؤجر' | 'مستأجر' | 'admin';
 export type PaymentStatus = 'pending' | 'approved' | 'rejected';
 
@@ -27,7 +30,7 @@ export interface Property {
     title: string;
     description: string;
     price: number;
-    priceUnit: 'يوم' | 'أسبوع' | 'شهر' | 'موسم';
+    priceUnit: PriceUnit;
     category: PropertyCategory;
     status: PropertyStatus;
     images: string[];

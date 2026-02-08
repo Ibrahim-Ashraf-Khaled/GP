@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Property } from '@/types';
+import { Property, CATEGORY_AR, STATUS_AR } from '@/types';
 
 interface MyPropertyCardProps {
     property: Property;
@@ -19,7 +19,7 @@ export default function MyPropertyCard({ property, onDelete }: MyPropertyCardPro
                     className="w-full h-full object-cover"
                 />
                 <div className="absolute top-2 right-2 bg-black/50 backdrop-blur-md text-white text-xs px-2 py-1 rounded-lg">
-                    {property.category}
+                    {CATEGORY_AR[property.category]}
                 </div>
             </div>
 
@@ -30,11 +30,11 @@ export default function MyPropertyCard({ property, onDelete }: MyPropertyCardPro
                         <Link href={`/property/${property.id}`} className="font-bold text-gray-900 dark:text-white line-clamp-1 hover:text-primary transition-colors">
                             {property.title}
                         </Link>
-                        <span className={`text-xs px-2 py-1 rounded-full font-medium ${property.status === 'متاح'
+                        <span className={`text-xs px-2 py-1 rounded-full font-medium ${property.status === 'available'
                                 ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
                                 : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
                             }`}>
-                            {property.status}
+                            {STATUS_AR[property.status]}
                         </span>
                     </div>
 

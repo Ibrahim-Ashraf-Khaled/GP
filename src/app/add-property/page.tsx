@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Navbar from '@/components/Navbar';
 import ProtectedRoute from '@/components/ProtectedRoute';
-import { AREAS, FEATURES, PropertyCategory } from '@/types';
+import { AREAS, FEATURES, PropertyCategory, PriceUnit, CATEGORY_AR, PRICE_UNIT_AR } from '@/types';
 import { addProperty, getCurrentUser, addNotification, uploadImage } from '@/lib/storage';
 
 export default function AddPropertyPage() {
@@ -18,8 +18,8 @@ export default function AddPropertyPage() {
         title: '',
         description: '',
         price: '',
-        priceUnit: 'يوم' as 'يوم' | 'أسبوع' | 'شهر' | 'موسم',
-        category: 'شقة' as PropertyCategory,
+        priceUnit: 'day' as PriceUnit,
+        category: 'apartment' as PropertyCategory,
         bedrooms: 1,
         bathrooms: 1,
         area: '',
@@ -45,8 +45,8 @@ export default function AddPropertyPage() {
 
     const [images, setImages] = useState<string[]>([]);
 
-    const categories: PropertyCategory[] = ['شقة', 'غرفة', 'استوديو', 'فيلا', 'شاليه'];
-    const priceUnits = ['يوم', 'أسبوع', 'شهر', 'موسم'];
+    const categories: PropertyCategory[] = ['apartment', 'room', 'studio', 'villa', 'chalet'];
+    const priceUnits: PriceUnit[] = ['day', 'week', 'month', 'season'];
 
     const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = e.target.files;
@@ -109,7 +109,7 @@ export default function AddPropertyPage() {
                 price: Number(formData.price),
                 priceUnit: formData.priceUnit,
                 category: formData.category,
-                status: 'متاح' as const,
+                status: 'available',
                 images: images, // الصور المرفوعة من handleImageUpload
                 location: {
                     lat: 31.4431,
@@ -230,8 +230,8 @@ export default function AddPropertyPage() {
                                     title: '',
                                     description: '',
                                     price: '',
-                                    priceUnit: 'يوم',
-                                    category: 'شقة',
+                                    priceUnit: 'day',
+                                    category: 'apartment',
                                     bedrooms: 1,
                                     bathrooms: 1,
                                     area: '',
@@ -314,7 +314,7 @@ export default function AddPropertyPage() {
                                                 : 'bg-gray-50 dark:bg-zinc-800 text-gray-600 dark:text-gray-400 border-transparent hover:bg-gray-100 dark:hover:bg-zinc-700'
                                                 }`}
                                         >
-                                            {cat}
+                                            {CATEGORY_AR[cat]}
                                         </button>
                                     ))}
                                 </div>
@@ -338,7 +338,7 @@ export default function AddPropertyPage() {
                                             className="w-full p-4 rounded-xl bg-gray-50 dark:bg-zinc-800 border-2 border-transparent focus:border-primary/50 outline-none text-gray-900 dark:text-white appearance-none"
                                         >
                                             {priceUnits.map(unit => (
-                                                <option key={unit} value={unit}>{unit}</option>
+                                                <option key={unit} value={unit}>{PRICE_UNIT_AR[unit]}</option>
                                             ))}
                                         </select>
                                         <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">expand_more</span>
@@ -478,10 +478,10 @@ export default function AddPropertyPage() {
                                 <h3 className="font-bold text-gray-900 dark:text-white border-b border-gray-200 dark:border-white/10 pb-2">ملخص العقار</h3>
                                 <div className="grid grid-cols-2 gap-y-2 text-sm">
                                     <span className="text-gray-500">النوع:</span>
-                                    <span className="text-gray-900 dark:text-white font-medium">{formData.category}</span>
+                                    <span className="text-gray-900 dark:text-white font-medium">{CATEGORY_AR[formData.category]}</span>
 
                                     <span className="text-gray-500">السعر:</span>
-                                    <span className="text-primary font-bold">{formData.price} ج.م / {formData.priceUnit}</span>
+                                    <span className="text-primary font-bold">{formData.price} ج.م / {PRICE_UNIT_AR[formData.priceUnit]}</span>
 
                                     <span className="text-gray-500">المنطقة:</span>
                                     <span className="text-gray-900 dark:text-white font-medium">{formData.selectedArea}</span>

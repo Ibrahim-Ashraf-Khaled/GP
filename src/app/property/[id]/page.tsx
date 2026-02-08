@@ -2,7 +2,7 @@ import { Metadata } from 'next';
 import { supabaseService } from '@/services/supabaseService';
 import ClientPropertyDetails from './client';
 import { notFound } from 'next/navigation';
-import { Property } from '@/types';
+import { Property, CATEGORY_AR } from '@/types';
 
 // Fetch property data helper
 async function getProperty(id: string): Promise<Property | null> {
@@ -16,9 +16,9 @@ async function getProperty(id: string): Promise<Property | null> {
         title: propertyRow.title,
         description: propertyRow.description || '',
         price: propertyRow.price,
-        priceUnit: propertyRow.price_unit || 'يوم',
+        priceUnit: propertyRow.price_unit || 'day',
         category: propertyRow.category,
-        status: propertyRow.status as any,
+        status: propertyRow.status,
         images: propertyRow.images || [],
         location: {
             lat: propertyRow.location_lat || 0,
@@ -52,7 +52,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
     }
 
     const title = `${property.title} - ${property.price} ج.م | عقارات جمصة`;
-    const description = `${property.category} للإيجار في ${property.location.address}. ${property.bedrooms} غرف، ${property.bathrooms} حمام. ${property.description.substring(0, 100)}...`;
+    const description = `${CATEGORY_AR[property.category]} للإيجار في ${property.location.address}. ${property.bedrooms} غرف، ${property.bathrooms} حمام. ${property.description.substring(0, 100)}...`;
 
     return {
         title: title,

@@ -1,5 +1,36 @@
 // Supabase Database Types
-// Auto-generated based on schema.sql
+// Schema-aligned: English enum values; use translation maps for UI.
+
+export type PropertyCategory = 'apartment' | 'villa' | 'chalet' | 'studio' | 'office' | 'land' | 'room';
+export type PriceUnit = 'day' | 'week' | 'month' | 'season';
+export type PropertyStatus = 'pending' | 'available' | 'rented' | 'rejected';
+
+/** Arabic labels for property category (UI) */
+export const CATEGORY_AR: Record<PropertyCategory, string> = {
+  apartment: 'شقة',
+  villa: 'فيلا',
+  chalet: 'شاليه',
+  studio: 'استوديو',
+  office: 'مكتب',
+  land: 'أرض',
+  room: 'غرفة',
+};
+
+/** Arabic labels for price/booking unit (UI) */
+export const PRICE_UNIT_AR: Record<PriceUnit, string> = {
+  day: 'يوم',
+  week: 'أسبوع',
+  month: 'شهر',
+  season: 'موسم',
+};
+
+/** Arabic labels for property status (UI) */
+export const STATUS_AR: Record<PropertyStatus, string> = {
+  available: 'متاح',
+  pending: 'قيد المراجعة',
+  rented: 'محجوز',
+  rejected: 'مرفوض',
+};
 
 export type Json =
     | string
@@ -57,9 +88,9 @@ export interface Database {
                     title: string;
                     description: string | null;
                     price: number;
-                    price_unit: 'يوم' | 'أسبوع' | 'شهر' | 'موسم';
-                    category: 'شقة' | 'غرفة' | 'استوديو' | 'فيلا' | 'شاليه';
-                    status: 'pending' | 'available' | 'rented' | 'rejected';
+                    price_unit: PriceUnit;
+                    category: PropertyCategory;
+                    status: PropertyStatus;
                     location_lat: number | null;
                     location_lng: number | null;
                     address: string | null;
@@ -83,9 +114,9 @@ export interface Database {
                     title: string;
                     description?: string | null;
                     price: number;
-                    price_unit?: 'يوم' | 'أسبوع' | 'شهر' | 'موسم';
-                    category: 'شقة' | 'غرفة' | 'استوديو' | 'فيلا' | 'شاليه';
-                    status?: 'pending' | 'available' | 'rented' | 'rejected';
+                    price_unit?: PriceUnit;
+                    category: PropertyCategory;
+                    status?: PropertyStatus;
                     location_lat?: number | null;
                     location_lng?: number | null;
                     address?: string | null;
@@ -109,9 +140,9 @@ export interface Database {
                     title?: string;
                     description?: string | null;
                     price?: number;
-                    price_unit?: 'يوم' | 'أسبوع' | 'شهر' | 'موسم';
-                    category?: 'شقة' | 'غرفة' | 'استوديو' | 'فيلا' | 'شاليه';
-                    status?: 'pending' | 'available' | 'rented' | 'rejected';
+                    price_unit?: PriceUnit;
+                    category?: PropertyCategory;
+                    status?: PropertyStatus;
                     location_lat?: number | null;
                     location_lng?: number | null;
                     address?: string | null;

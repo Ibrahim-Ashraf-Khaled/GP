@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Property, User } from '@/types';
+import { Property, User, CATEGORY_AR, PRICE_UNIT_AR } from '@/types';
 import Header from '@/components/Header';
 import { UnlockModal } from '@/components/UnlockModal';
 import { ImageSkeleton } from '@/components/ImageSkeleton';
@@ -94,7 +94,7 @@ export default function ClientPropertyDetails({ initialProperty }: ClientPropert
                         <div className="flex-1">
                             <div className="flex items-center gap-2 mb-2">
                                 <span className="bg-primary/10 text-primary text-xs font-bold px-3 py-1 rounded-full">
-                                    {property.category}
+                                    {CATEGORY_AR[property.category]}
                                 </span>
                                 {property.isVerified && (
                                     <span className="bg-green-500/10 text-green-500 text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1">
@@ -111,7 +111,7 @@ export default function ClientPropertyDetails({ initialProperty }: ClientPropert
                         </div>
                         <div className="text-left rtl:text-left rtl:ml-0 ltr:ml-4">
                             <p className="text-primary font-bold text-2xl md:text-3xl">{property.price} <span className="text-sm font-normal">ج.م</span></p>
-                            <p className="text-xs text-gray-400">لكل {property.priceUnit}</p>
+                            <p className="text-xs text-gray-400">لكل {PRICE_UNIT_AR[property.priceUnit]}</p>
                         </div>
                     </div>
 

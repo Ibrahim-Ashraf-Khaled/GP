@@ -3,12 +3,13 @@
 import { useEffect, useState } from 'react';
 import { supabaseService, PropertyRow } from '@/services/supabaseService';
 import { GlassCard, GlassButton } from '@/components/ui/glass';
+import { CATEGORY_AR, PRICE_UNIT_AR, STATUS_AR } from '@/types';
 
 export default function AdminPropertiesPage() {
     const [properties, setProperties] = useState<PropertyRow[]>([]);
     const [loading, setLoading] = useState(true);
     const [actionLoading, setActionLoading] = useState<string | null>(null);
-    const [filter, setFilter] = useState<'pending' | 'متاح' | 'rejected' | 'all'>('pending');
+    const [filter, setFilter] = useState<'pending' | 'available' | 'rejected' | 'all'>('pending');
 
     useEffect(() => {
         loadProperties();
@@ -28,7 +29,7 @@ export default function AdminPropertiesPage() {
         }
     };
 
-    const handleAction = async (id: string, newStatus: 'متاح' | 'rejected') => {
+    const handleAction = async (id: string, newStatus: 'available' | 'rejected') => {
         setActionLoading(id);
         try {
             await supabaseService.updateProperty(id, { status: newStatus });
@@ -38,11 +39,11 @@ export default function AdminPropertiesPage() {
             if (property) {
                 await supabaseService.createNotification({
                     userId: property.owner_id,
-                    title: newStatus === 'متاح' ? 'تمت الموافقة على عقارك!' : 'تم رفض عقارك',
-                    message: newStatus === 'متاح'
+                    title: newStatus === 'available' ? 'تمت الموافقة على عقارك!' : 'تم رفض عقارك',
+                    message: newStatus === 'available'
                         ? `عقارك "${property.title}" أصبح متاحاً للعرض الآن.`
                         : `عقارك "${property.title}" لم يستوفِ معايير النشر.`,
-                    type: newStatus === 'متاح' ? 'success' : 'error',
+                    type: newStatus === 'available' ? 'success' : 'error',
                     link: `/property/${property.id}`,
                 });
             }
@@ -56,17 +57,18 @@ export default function AdminPropertiesPage() {
     };
 
     const getStatusBadge = (status: string) => {
+        const label = STATUS_AR[status as keyof typeof STATUS_AR] ?? status;
         switch (status) {
             case 'pending':
-                return <span className="px-2 py-1 rounded-full bg-amber-500/20 text-amber-500 text-xs font-medium">معلق</span>;
-            case 'متاح':
-                return <span className="px-2 py-1 rounded-full bg-green-500/20 text-green-500 text-xs font-medium">متاح</span>;
+                return <span className="px-2 py-1 rounded-full bg-amber-500/20 text-amber-500 text-xs font-medium">{label}</span>;
+            case 'available':
+                return <span className="px-2 py-1 rounded-full bg-green-500/20 text-green-500 text-xs font-medium">{label}</span>;
             case 'rejected':
-                return <span className="px-2 py-1 rounded-full bg-red-500/20 text-red-500 text-xs font-medium">مرفوض</span>;
-            case 'محجوز':
-                return <span className="px-2 py-1 rounded-full bg-blue-500/20 text-blue-500 text-xs font-medium">محجوز</span>;
+                return <span className="px-2 py-1 rounded-full bg-red-500/20 text-red-500 text-xs font-medium">{label}</span>;
+            case 'rented':
+                return <span className="px-2 py-1 rounded-full bg-blue-500/20 text-blue-500 text-xs font-medium">{label}</span>;
             default:
-                return <span className="px-2 py-1 rounded-full bg-gray-500/20 text-gray-500 text-xs font-medium">{status}</span>;
+                return <span className="px-2 py-1 rounded-full bg-gray-500/20 text-gray-500 text-xs font-medium">{label}</span>;
         }
     };
 
@@ -75,7 +77,7 @@ export default function AdminPropertiesPage() {
             <div className="flex items-center justify-between">
                 <h1 className="text-2xl font-bold text-gray-900 dark:text-white">إدارة العقارات</h1>
                 <div className="flex gap-2">
-                    {(['pending', 'متاح', 'rejected', 'all'] as const).map(f => (
+                    {(['pending', 'available', 'rejected', 'all'] as const).map(f => (
                         <button
                             key={f}
                             onClick={() => setFilter(f)}
@@ -84,7 +86,7 @@ export default function AdminPropertiesPage() {
                                     : 'bg-white/50 dark:bg-white/10 text-gray-600 dark:text-gray-400 hover:bg-white dark:hover:bg-white/20'
                                 }`}
                         >
-                            {f === 'pending' ? 'معلقة' : f === 'متاح' ? 'متاحة' : f === 'rejected' ? 'مرفوضة' : 'الكل'}
+                            {f === 'pending' ? 'معلقة' : f === 'available' ? 'متاحة' : f === 'rejected' ? 'مرفوضة' : 'الكل'}
                         </button>
                     ))}
                 </div>
@@ -118,10 +120,10 @@ export default function AdminPropertiesPage() {
                                         <div>
                                             <h3 className="font-bold text-gray-900 dark:text-white truncate">{prop.title}</h3>
                                             <p className="text-sm text-gray-500 mt-1">
-                                                {prop.category} • {prop.bedrooms} غرف • {prop.area || 'جمصة'}
+                                                {CATEGORY_AR[prop.category as keyof typeof CATEGORY_AR]} • {prop.bedrooms} غرف • {prop.area || 'جمصة'}
                                             </p>
                                             <p className="text-primary font-bold mt-1">
-                                                {prop.price} ج.م / {prop.price_unit}
+                                                {prop.price} ج.م / {PRICE_UNIT_AR[prop.price_unit as keyof typeof PRICE_UNIT_AR]}
                                             </p>
                                         </div>
                                         {getStatusBadge(prop.status)}
@@ -133,7 +135,7 @@ export default function AdminPropertiesPage() {
                                             <GlassButton
                                                 variant="primary"
                                                 size="sm"
-                                                onClick={() => handleAction(prop.id, 'متاح')}
+                                                onClick={() => handleAction(prop.id, 'available')}
                                                 loading={actionLoading === prop.id}
                                                 disabled={actionLoading === prop.id}
                                             >

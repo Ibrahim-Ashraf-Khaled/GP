@@ -3,7 +3,10 @@ import { supabase, STORAGE_BUCKET, uploadImage, deleteImage } from '@/lib/supaba
 import { Conversation, Message, Profile } from '@/types/messaging';
 
 // === Mock Mode Flag ===
-export const IS_MOCK_MODE = true;
+export const IS_MOCK_MODE =
+  typeof window !== 'undefined'
+    ? window.localStorage.getItem('DEV_MOCK_MODE') === 'true'
+    : process.env.NEXT_PUBLIC_IS_MOCK_MODE === 'true';
 
 // أنواع البيانات
 export interface UserProfile {
@@ -16,12 +19,14 @@ export interface UserProfile {
     is_admin: boolean;
 }
 
+import type { PropertyCategory, PriceUnit, PropertyStatus } from '@/types/database.types';
+
 export interface PropertyInsert {
     title: string;
     description?: string;
     price: number;
-    price_unit?: 'يوم' | 'أسبوع' | 'شهر' | 'موسم';
-    category: 'شقة' | 'غرفة' | 'استوديو' | 'فيلا' | 'شاليه';
+    price_unit?: PriceUnit;
+    category: PropertyCategory;
     location_lat?: number;
     location_lng?: number;
     address?: string;
@@ -38,7 +43,7 @@ export interface PropertyInsert {
 export interface PropertyRow extends PropertyInsert {
     id: string;
     owner_id: string;
-    status: 'pending' | 'متاح' | 'محجوز' | 'مؤجر' | 'rejected';
+    status: PropertyStatus;
     images: string[];
     is_verified: boolean;
     views_count: number;
@@ -53,8 +58,8 @@ const MOCK_PROPERTIES: PropertyRow[] = [
         title: 'شقة فاخرة تطل على البحر',
         description: 'شقة رائعة بفيو مباشر على البحر، مكونة من 3 غرف وصالة كبيرة. تشطيب سوبر لوكس ومجهزة بالكامل.',
         price: 1500,
-        price_unit: 'يوم',
-        category: 'شقة',
+        price_unit: 'day',
+        category: 'apartment',
         address: 'شارع البحر، جمصة',
         area: 'منطقة الفيلات',
         bedrooms: 3,
@@ -66,7 +71,7 @@ const MOCK_PROPERTIES: PropertyRow[] = [
         owner_id: 'owner-1',
         owner_name: 'الحاج محمد',
         owner_phone: '01012345678',
-        status: 'متاح',
+        status: 'available',
         is_verified: true,
         views_count: 150,
         created_at: new Date().toISOString(),
@@ -77,8 +82,8 @@ const MOCK_PROPERTIES: PropertyRow[] = [
         title: 'شالية أرضي بحديقة خاصة',
         description: 'شالية جميل قريب من السوق ومنطقة المطاعم. به حديقة خاصة ومدخل مستقل.',
         price: 800,
-        price_unit: 'يوم',
-        category: 'شاليه',
+        price_unit: 'day',
+        category: 'chalet',
         address: 'منطقة 15 مايو',
         area: '15 مايو',
         bedrooms: 2,
@@ -90,7 +95,7 @@ const MOCK_PROPERTIES: PropertyRow[] = [
         owner_id: 'owner-2',
         owner_name: 'أم كريم',
         owner_phone: '01122334455',
-        status: 'متاح',
+        status: 'available',
         is_verified: true,
         views_count: 85,
         created_at: new Date().toISOString(),
@@ -101,8 +106,8 @@ const MOCK_PROPERTIES: PropertyRow[] = [
         title: 'ستوديو اقتصادي للطلاب',
         description: 'ستوديو صغير ومريح، مناسب للطلاب أو الأفراد. قريب من الجامعة.',
         price: 3000,
-        price_unit: 'شهر',
-        category: 'استوديو',
+        price_unit: 'month',
+        category: 'studio',
         address: 'حي الشباب',
         area: 'تقسيم الشباب',
         bedrooms: 1,
@@ -114,7 +119,7 @@ const MOCK_PROPERTIES: PropertyRow[] = [
         owner_id: 'owner-1',
         owner_name: 'الحاج محمد',
         owner_phone: '01012345678',
-        status: 'متاح',
+        status: 'available',
         is_verified: false,
         views_count: 40,
         created_at: new Date().toISOString(),
@@ -125,8 +130,8 @@ const MOCK_PROPERTIES: PropertyRow[] = [
         title: 'فيلا مستقلة للعائلات الكبيرة',
         description: 'فيلا دورين بحديقة وحمام سباحة، تكفي عائلة كبيرة. قريبة من البحر.',
         price: 5000,
-        price_unit: 'يوم',
-        category: 'فيلا',
+        price_unit: 'day',
+        category: 'villa',
         address: 'منطقة الفيلات الجديدة',
         area: 'منطقة الفيلات',
         bedrooms: 5,
@@ -138,7 +143,7 @@ const MOCK_PROPERTIES: PropertyRow[] = [
         owner_id: 'owner-3',
         owner_name: 'د. محمود',
         owner_phone: '01233445566',
-        status: 'متاح',
+        status: 'available',
         is_verified: true,
         views_count: 320,
         created_at: new Date().toISOString(),
@@ -786,7 +791,8 @@ export const supabaseService = {
             ];
         }
 
-        const { data, error } = await supabase
+        // Use parameterized filters to prevent injection (no string interpolation in .or())
+        const { data: asBuyer, error: errBuyer } = await supabase
             .from('conversations')
             .select(`
                 *,
@@ -795,8 +801,24 @@ export const supabaseService = {
                 owner:profiles!owner_id(full_name, avatar_url),
                 last_message:messages(text, created_at, is_read, sender_id)
             `)
-            .or(`buyer_id.eq.${userId},owner_id.eq.${userId}`)
+            .eq('buyer_id', userId)
             .order('updated_at', { ascending: false });
+
+        const { data: asOwner, error: errOwner } = await supabase
+            .from('conversations')
+            .select(`
+                *,
+                property:properties(title, images),
+                buyer:profiles!buyer_id(full_name, avatar_url),
+                owner:profiles!owner_id(full_name, avatar_url),
+                last_message:messages(text, created_at, is_read, sender_id)
+            `)
+            .eq('owner_id', userId)
+            .order('updated_at', { ascending: false });
+
+        const error = errBuyer || errOwner;
+        const data = [...(asBuyer || []), ...(asOwner || [])]
+            .sort((a: any, b: any) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
 
         if (error) {
             console.error('Error fetching conversations:', error);
@@ -1128,7 +1150,8 @@ export const supabaseService = {
             .select('id')
             .eq('property_id', propertyId)
             .in('status', ['confirmed', 'pending'])
-            .or(`start_date.lte.${endDate},end_date.gte.${startDate}`);
+            .gte('end_date', startDate)
+            .lte('start_date', endDate);
 
         return {
             available: !data || data.length === 0,

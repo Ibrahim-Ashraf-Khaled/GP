@@ -60,8 +60,8 @@ export default function BookingPage() {
 
         // تحديد نوع الإيجار بناءً على priceUnit
         let type: RentalType = 'daily';
-        if (property.price_unit === 'شهر' || property.price_unit === 'موسم') {
-            type = property.price_unit === 'موسم' ? 'seasonal' : 'monthly';
+        if (property.price_unit === 'month' || property.price_unit === 'season') {
+            type = property.price_unit === 'season' ? 'seasonal' : 'monthly';
         }
 
         // استخدام rentalConfig إذا كان موجوداً، وإلا إنشاء تكوين افتراضي

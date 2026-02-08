@@ -1,5 +1,6 @@
 import Link from 'next/link';
-import { Property } from '@/types/index'; // Adjust import based on your project structure
+import { Property, PRICE_UNIT_AR } from '@/types';
+import type { PriceUnit } from '@/types/database.types';
 
 interface PropertyContextCardProps {
     property: any; // Using any temporarily if Property type mismatch, ideally Property
@@ -30,7 +31,7 @@ export const PropertyContextCard = ({ property }: PropertyContextCardProps) => {
                         </span>
                         <span className="w-1 h-1 rounded-full bg-gray-300"></span>
                         <span className="text-primary font-bold">
-                            {property.price} {property.price_unit || property.priceUnit || 'ج.م'}
+                            {property.price} ج.م / {PRICE_UNIT_AR[(property.price_unit || property.priceUnit || 'day') as PriceUnit]}
                         </span>
                     </div>
                 </div>

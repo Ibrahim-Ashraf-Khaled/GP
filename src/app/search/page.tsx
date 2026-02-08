@@ -30,7 +30,7 @@ export default function SearchPage() {
         try {
             // Convert database rows to Property type
             const rows = await supabaseService.getProperties({
-                status: 'متاح',
+                status: 'available',
                 ...activeFilters
             });
 
@@ -41,9 +41,9 @@ export default function SearchPage() {
                 title: row.title,
                 description: row.description || '',
                 price: row.price,
-                priceUnit: row.price_unit || 'يوم',
+                priceUnit: row.price_unit || 'day',
                 category: row.category,
-                status: row.status as any,
+                status: row.status,
                 images: row.images || [],
                 location: {
                     lat: row.location_lat || 0,
