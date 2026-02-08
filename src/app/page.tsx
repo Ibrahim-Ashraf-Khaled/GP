@@ -1,10 +1,9 @@
-'use client';
-
-import { useState } from 'react';
+import { Metadata } from 'next';
 import Link from 'next/link';
 import { BottomNav } from '@/components/BottomNav';
 import Header from '@/components/Header';
 import { PropertyCard } from '@/components/PropertyCard';
+import { CategoryFilter } from '@/components/CategoryFilter';
 
 // Mock data matches PropertyCardProps roughly
 const featuredProperties = [
@@ -32,11 +31,9 @@ const featuredProperties = [
     rating: 4.8,
     bedrooms: 1,
     bathrooms: 1,
-    area: 60,
+    area: 45,
+    isVerified: true
   },
-];
-
-const recentProperties = [
   {
     id: "3",
     title: "شقة فندقية فاخرة",
@@ -78,16 +75,61 @@ const recentProperties = [
   }
 ];
 
-const categories = [
-  { id: "all", icon: "apartment", label: "الكل", active: true },
-  { id: "chalet", icon: "beach_access", label: "شاليهات", active: false },
-  { id: "villa", icon: "home", label: "فيلات", active: false },
-  { id: "studio", icon: "weekend", label: "ستوديو", active: false },
+const recentProperties = [
+  {
+    id: "6",
+    title: "فيلا بإطلالة بحرية",
+    location: "منطقة الشاطئ، جمصة",
+    price: 1500,
+    priceUnit: "ليلة",
+    image: "/images/property4.png",
+    bedrooms: 3,
+    bathrooms: 2,
+    area: 200,
+    isVerified: true,
+    rating: 4.9,
+  },
+  {
+    id: "7",
+    title: "شالية حديثة",
+    location: "الكورنيش، جمصة",
+    price: 650,
+    priceUnit: "ليلة",
+    image: "/images/property3.png",
+    bedrooms: 2,
+    bathrooms: 1,
+    area: 75,
+    isVerified: false,
+    rating: 4.6,
+  },
+  {
+    id: "8",
+    title: "شقة عائلية واسعة",
+    location: "جمصة البلد",
+    price: 750,
+    priceUnit: "ليلة",
+    image: "/images/property2.png",
+    bedrooms: 3,
+    bathrooms: 2,
+    area: 140,
+    isVerified: true,
+    rating: 4.4,
+  },
 ];
 
-export default function HomePage() {
-  const [activeCategory, setActiveCategory] = useState("all");
+export const metadata: Metadata = {
+  title: 'عقارات جمصة - ابحث عن شاليهات، فيلات، وشقق للإيجار',
+  description: 'اكتشف أفضل العقارات للإيجار في جمصة. شاليهات، فيلات، وشقق عصرية بأسعار تنافسية. احجز الآن واستمتع بإجازتك.',
+  keywords: ['عقارات جمصة', 'شاليهات جمصة', 'فيلات جمصة', 'شقق للإيجار جمصة', 'إجار عطلات جمصة'],
+  openGraph: {
+    title: 'عقارات جمصة - أفضل الإيجارات السكنية',
+    description: 'اكتشف أفضل العقارات للإيجار في جمصة',
+    type: 'website',
+    locale: 'ar_EG',
+  },
+};
 
+export default function HomePage() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-black pb-24">
       {/* Static Header (scrolls away) */}
@@ -117,76 +159,70 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* Filter Chips */}
-      <div className="max-w-5xl mx-auto px-4 mt-6">
-        <div className="flex gap-3 overflow-x-auto hide-scrollbar pb-2">
-          {categories.map((category) => (
-            <button
-              key={category.id}
-              onClick={() => setActiveCategory(category.id)}
-              className={`flex shrink-0 items-center justify-center gap-x-2 rounded-full px-5 py-2.5 transition-all text-sm font-medium border active:scale-95 ${activeCategory === category.id
-                ? "bg-primary text-white border-primary shadow-lg shadow-primary/20"
-                : "bg-white dark:bg-surface-dark border-gray-200 dark:border-gray-800 text-gray-700 dark:text-gray-200 hover:border-primary/30"
-                }`}
-            >
-              <span className="material-symbols-outlined text-[20px]">
-                {category.icon}
-              </span>
-              {category.label}
-            </button>
+      {/* Client-side Category Filter */}
+      <CategoryFilter />
+
+      {/* Featured Properties Section */}
+      <section className="px-4 py-6 max-w-5xl mx-auto">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+            <span className="material-symbols-outlined text-primary text-2xl">stars</span>
+            مميز
+          </h2>
+          <Link
+            href="/search?featured=true"
+            className="text-sm text-primary hover:text-primary/80 font-medium"
+          >
+            عرض الكل
+          </Link>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          {featuredProperties.map((property) => (
+            <PropertyCard key={property.id} {...property} />
           ))}
         </div>
-      </div>
+      </section>
 
-      <div className="max-w-5xl mx-auto flex flex-col gap-8 pb-6">
+      {/* Recent Properties Section */}
+      <section className="px-4 py-6 max-w-5xl mx-auto">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+            <span className="material-symbols-outlined text-primary text-2xl">new_releases</span>
+            حديث الإضافة
+          </h2>
+          <Link
+            href="/search?recent=true"
+            className="text-sm text-primary hover:text-primary/80 font-medium"
+          >
+            عرض الكل
+          </Link>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          {recentProperties.map((property) => (
+            <PropertyCard key={property.id} {...property} />
+          ))}
+        </div>
+      </section>
 
-        {/* Featured Section */}
-        <div className="mt-4">
-          <div className="flex items-center justify-between px-4 mb-4">
-            <h3 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-              عروض مميزة <span className="text-xl">🔥</span>
-            </h3>
+      {/* CTA Section */}
+      <section className="px-4 py-8 max-w-5xl mx-auto">
+        <div className="bg-gradient-to-r from-primary to-primary/90 rounded-3xl p-8 text-center text-white relative overflow-hidden">
+          <div className="absolute inset-0 bg-black/10"></div>
+          <div className="relative z-10">
+            <h2 className="text-2xl font-bold mb-4">هل تملك عقار في جمصة؟</h2>
+            <p className="text-white/90 mb-6 max-w-md mx-auto">
+              انشر عقارك في منصتنا واكتآف من آلاف المستأجرين الباحثين عن إقامة مميزة
+            </p>
             <Link
-              href="/search"
-              className="text-sm font-bold text-primary flex items-center gap-1 hover:gap-2 transition-all"
+              href="/add-property"
+              className="inline-flex items-center gap-2 bg-white text-primary px-6 py-3 rounded-2xl font-medium hover:bg-white/90 transition-all hover:scale-105 active:scale-95"
             >
-              عرض الكل
-              <span className="material-symbols-outlined text-[18px] rtl:rotate-180">
-                arrow_right_alt
-              </span>
+              <span className="material-symbols-outlined">add_home</span>
+              أضف عقارك الآن
             </Link>
           </div>
-
-          <div className="flex overflow-x-auto hide-scrollbar px-4 gap-4 pb-4 snap-x snap-mandatory">
-            {featuredProperties.map((property) => (
-              <div
-                key={property.id}
-                className="flex-none w-[300px] snap-center animate-fadeIn"
-              >
-                <PropertyCard {...property} />
-              </div>
-            ))}
-          </div>
         </div>
-
-        {/* Recent Listings */}
-        <div>
-          <div className="px-4 mb-4">
-            <h3 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-              أضيف حديثاً <span className="text-xl">✨</span>
-            </h3>
-          </div>
-
-          <div className="px-4 grid grid-cols-1 md:grid-cols-2 gap-6">
-            {recentProperties.map((property) => (
-              <div key={property.id} className="animate-slideUp">
-                <PropertyCard {...property} />
-              </div>
-            ))}
-          </div>
-        </div>
-
-      </div>
+      </section>
 
       <BottomNav />
     </div>
