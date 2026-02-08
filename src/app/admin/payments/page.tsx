@@ -76,17 +76,31 @@ export default function AdminPaymentsPage() {
                 .eq('id', payment.id);
 
             if (newStatus === 'approved') {
-                // Unlock the property for the user
-                await supabaseService.unlockProperty(payment.user_id, payment.property_id);
+                try {
+                    // Unlock the property for the user (now secure)
+                    await supabaseService.unlockProperty(payment.user_id, payment.property_id);
 
-                // Send success notification
-                await supabaseService.createNotification({
-                    userId: payment.user_id,
-                    title: 'تم قبول طلب الدفع!',
-                    message: 'يمكنك الآن رؤية بيانات التواصل مع المالك.',
-                    type: 'success',
-                    link: `/property/${payment.property_id}`,
-                });
+                    // Send success notification
+                    await supabaseService.createNotification({
+                        userId: payment.user_id,
+                        title: 'تم قبول طلب الدفع!',
+                        message: 'يمكنك الآن رؤية بيانات التواصل مع المالك.',
+                        type: 'success',
+                        link: `/property/${payment.property_id}`,
+                    });
+                } catch (unlockError) {
+                    console.error('Failed to unlock property:', unlockError);
+                    
+                    // Revert payment status if unlock fails
+                    await supabase
+                        .from('payment_requests')
+                        .update({ status: 'pending' })
+                        .eq('id', payment.id);
+                    
+                    alert('فشل فتح العقار. يرجى المحاولة مرة أخرى.');
+                    loadPayments();
+                    return;
+                }
             } else {
                 // Send rejection notification
                 await supabaseService.createNotification({
@@ -100,6 +114,7 @@ export default function AdminPaymentsPage() {
             loadPayments();
         } catch (error) {
             console.error('Error updating payment:', error);
+            alert('فشل تحديث حالة الدفع. يرجى المحاولة مرة أخرى.');
         } finally {
             setActionLoading(null);
         }

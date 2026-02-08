@@ -535,9 +535,61 @@ export const supabaseService = {
             _mockUnlocked.add(propertyId);
             return;
         }
-        await supabase
-            .from('unlocked_properties')
-            .insert({ user_id: userId, property_id: propertyId });
+
+        try {
+            // ✅ STEP 1: Verify payment exists and is approved
+            const { data: payment, error: paymentError } = await supabase
+                .from('payment_requests')
+                .select('*')
+                .eq('user_id', userId)
+                .eq('property_id', propertyId)
+                .eq('status', 'approved')
+                .eq('is_consumed', false)
+                .maybeSingle();
+
+            if (paymentError) {
+                throw new Error(`خطأ في التحقق من الدفع: ${paymentError.message}`);
+            }
+
+            if (!payment) {
+                throw new Error('لا يوجد دفع معتمد لهذا العقار');
+            }
+
+            // ✅ STEP 2: Verify amount
+            const UNLOCK_FEE = 50; // EGP
+            if (payment.amount < UNLOCK_FEE) {
+                throw new Error(
+                    `المبلغ المدفوع (${payment.amount} جنيه) أقل من الرسوم المطلوبة (${UNLOCK_FEE} جنيه)`
+                );
+            }
+
+            // ✅ STEP 3: Check if already unlocked
+            const { data: alreadyUnlocked } = await supabase
+                .from('unlocked_properties')
+                .select('id')
+                .eq('user_id', userId)
+                .eq('property_id', propertyId)
+                .maybeSingle();
+
+            if (alreadyUnlocked) {
+                throw new Error('العقار مفتوح بالفعل');
+            }
+
+            // ✅ STEP 4: Atomic operation - mark payment consumed + unlock property
+            const { error: unlockError } = await supabase.rpc('unlock_property_with_payment', {
+                p_user_id: userId,
+                p_property_id: propertyId,
+                p_payment_id: payment.id
+            });
+
+            if (unlockError) {
+                throw new Error(`فشل فتح العقار: ${unlockError.message}`);
+            }
+
+        } catch (error: any) {
+            console.error('Error unlocking property:', error);
+            throw error;
+        }
     },
 
     // ====== طلبات الدفع ======
@@ -1143,6 +1195,17 @@ export const supabaseService = {
         if (IS_MOCK_MODE) {
             // في وضع Mock، نفترض أن العقار متاح دائماً
             return { available: true, error: null };
+        }
+
+        // Defensive validation
+        const { validateDateString, validateUUID } = await import('@/utils/validation');
+        
+        if (!validateUUID(propertyId)) {
+            return { available: false, error: { message: 'معرف العقار غير صالح' } };
+        }
+        
+        if (!validateDateString(startDate) || !validateDateString(endDate)) {
+            return { available: false, error: { message: 'تاريخ غير صالح' } };
         }
 
         const { data, error } = await supabase
