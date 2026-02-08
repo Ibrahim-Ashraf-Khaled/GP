@@ -1,7 +1,7 @@
 // Supabase Database Types
 // Schema-aligned: English enum values; use translation maps for UI.
 
-export type PropertyCategory = 'apartment' | 'villa' | 'chalet' | 'studio' | 'office' | 'land' | 'room';
+export type PropertyCategory = 'apartment' | 'villa' | 'chalet' | 'studio' | 'room';
 export type PriceUnit = 'day' | 'week' | 'month' | 'season';
 export type PropertyStatus = 'pending' | 'available' | 'rented' | 'rejected';
 
@@ -11,8 +11,6 @@ export const CATEGORY_AR: Record<PropertyCategory, string> = {
   villa: 'فيلا',
   chalet: 'شاليه',
   studio: 'استوديو',
-  office: 'مكتب',
-  land: 'أرض',
   room: 'غرفة',
 };
 
@@ -165,32 +163,74 @@ export interface Database {
                 Row: {
                     id: string;
                     property_id: string;
-                    guest_id: string;
-                    check_in: string;
-                    check_out: string;
+                    user_id: string;
+                    start_date: string;
+                    end_date: string;
+                    total_nights: number;
+                    total_months: number;
+                    rental_type: 'daily' | 'monthly' | 'seasonal';
+                    tenant_name: string | null;
+                    tenant_phone: string | null;
+                    tenant_email: string | null;
+                    base_price: number | null;
+                    service_fee: number | null;
+                    deposit_amount: number | null;
                     total_price: number;
+                    total_amount: number;
+                    payment_method: 'vodafone_cash' | 'instapay' | 'cash_on_delivery' | null;
+                    payment_status: 'pending' | 'confirmed' | 'failed' | null;
+                    payment_proof: string | null;
                     status: 'pending' | 'confirmed' | 'cancelled' | 'completed';
                     created_at: string;
+                    confirmed_at: string | null;
                 };
                 Insert: {
                     id?: string;
                     property_id: string;
-                    guest_id: string;
-                    check_in: string;
-                    check_out: string;
-                    total_price: number;
+                    user_id: string;
+                    start_date: string;
+                    end_date: string;
+                    total_nights?: number;
+                    total_months?: number;
+                    rental_type?: 'daily' | 'monthly' | 'seasonal';
+                    tenant_name?: string | null;
+                    tenant_phone?: string | null;
+                    tenant_email?: string | null;
+                    base_price?: number | null;
+                    service_fee?: number | null;
+                    deposit_amount?: number | null;
+                    total_price?: number;
+                    total_amount?: number;
+                    payment_method?: 'vodafone_cash' | 'instapay' | 'cash_on_delivery' | null;
+                    payment_status?: 'pending' | 'confirmed' | 'failed' | null;
+                    payment_proof?: string | null;
                     status?: 'pending' | 'confirmed' | 'cancelled' | 'completed';
                     created_at?: string;
+                    confirmed_at?: string | null;
                 };
                 Update: {
                     id?: string;
                     property_id?: string;
-                    guest_id?: string;
-                    check_in?: string;
-                    check_out?: string;
+                    user_id?: string;
+                    start_date?: string;
+                    end_date?: string;
+                    total_nights?: number;
+                    total_months?: number;
+                    rental_type?: 'daily' | 'monthly' | 'seasonal';
+                    tenant_name?: string | null;
+                    tenant_phone?: string | null;
+                    tenant_email?: string | null;
+                    base_price?: number | null;
+                    service_fee?: number | null;
+                    deposit_amount?: number | null;
                     total_price?: number;
+                    total_amount?: number;
+                    payment_method?: 'vodafone_cash' | 'instapay' | 'cash_on_delivery' | null;
+                    payment_status?: 'pending' | 'confirmed' | 'failed' | null;
+                    payment_proof?: string | null;
                     status?: 'pending' | 'confirmed' | 'cancelled' | 'completed';
                     created_at?: string;
+                    confirmed_at?: string | null;
                 };
             };
             payment_requests: {
@@ -324,8 +364,88 @@ export interface Database {
                 };
             };
         };
+            conversations: {
+                Row: {
+                    id: string;
+                    property_id: string | null;
+                    buyer_id: string;
+                    owner_id: string;
+                    created_at: string;
+                    updated_at: string;
+                };
+                Insert: {
+                    id?: string;
+                    property_id?: string | null;
+                    buyer_id: string;
+                    owner_id: string;
+                    created_at?: string;
+                    updated_at?: string;
+                };
+                Update: {
+                    id?: string;
+                    property_id?: string | null;
+                    buyer_id?: string;
+                    owner_id?: string;
+                    created_at?: string;
+                    updated_at?: string;
+                };
+            };
+            messages: {
+                Row: {
+                    id: string;
+                    conversation_id: string;
+                    sender_id: string | null;
+                    text: string;
+                    is_read: boolean;
+                    created_at: string;
+                    message_type: string | null;
+                    media_url: string | null;
+                    duration: number | null;
+                    metadata: Json | null;
+                };
+                Insert: {
+                    id?: string;
+                    conversation_id: string;
+                    sender_id?: string | null;
+                    text: string;
+                    is_read?: boolean;
+                    created_at?: string;
+                    message_type?: string | null;
+                    media_url?: string | null;
+                    duration?: number | null;
+                    metadata?: Json | null;
+                };
+                Update: {
+                    id?: string;
+                    conversation_id?: string;
+                    sender_id?: string | null;
+                    text?: string;
+                    is_read?: boolean;
+                    created_at?: string;
+                    message_type?: string | null;
+                    media_url?: string | null;
+                    duration?: number | null;
+                    metadata?: Json | null;
+                };
+            };
+        };
         Views: Record<string, never>;
-        Functions: Record<string, never>;
+        Functions: {
+            increment_views: {
+                Args: {
+                    property_id: string;
+                };
+                Returns: void;
+            };
+            unlock_property_with_payment: {
+                Args: {
+                    p_user_id: string;
+                    p_property_id: string;
+                    p_payment_id: string;
+                };
+                Returns: void;
+            };
+        };
         Enums: Record<string, never>;
     };
 }
@@ -338,3 +458,6 @@ export type PaymentRequest = Database['public']['Tables']['payment_requests']['R
 export type Review = Database['public']['Tables']['reviews']['Row'];
 export type Notification = Database['public']['Tables']['notifications']['Row'];
 export type Favorite = Database['public']['Tables']['favorites']['Row'];
+export type UnlockedProperty = Database['public']['Tables']['unlocked_properties']['Row'];
+export type Conversation = Database['public']['Tables']['conversations']['Row'];
+export type Message = Database['public']['Tables']['messages']['Row'];

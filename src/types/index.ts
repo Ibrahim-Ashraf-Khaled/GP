@@ -5,18 +5,25 @@ import type { PropertyCategory, PropertyStatus, PriceUnit } from './database.typ
 export type { PropertyCategory, PropertyStatus, PriceUnit } from './database.types';
 export { CATEGORY_AR, PRICE_UNIT_AR, STATUS_AR } from './database.types';
 
-export type UserRole = 'مؤجر' | 'مستأجر' | 'admin';
+export type UserRole = 'tenant' | 'landlord' | 'admin';
 export type PaymentStatus = 'pending' | 'approved' | 'rejected';
 
 // Role Constants
-export const ROLE_LANDLORD: UserRole = 'مؤجر';
-export const ROLE_TENANT: UserRole = 'مستأجر';
+export const ROLE_LANDLORD: UserRole = 'landlord';
+export const ROLE_TENANT: UserRole = 'tenant';
 export const ROLE_ADMIN: UserRole = 'admin';
 
+// Role Labels (Arabic for UI)
+export const ROLE_LABELS: Record<UserRole, string> = {
+  tenant: 'مستأجر',
+  landlord: 'مؤجر',
+  admin: 'مسؤول',
+};
+
 // Role Helper Functions
-export const isLandlord = (role: UserRole | undefined): boolean => role === ROLE_LANDLORD;
-export const isTenant = (role: UserRole | undefined): boolean => role === ROLE_TENANT;
-export const isAdmin = (role: UserRole | undefined): boolean => role === ROLE_ADMIN;
+export const isLandlord = (role: UserRole | undefined): boolean => role === 'landlord';
+export const isTenant = (role: UserRole | undefined): boolean => role === 'tenant';
+export const isAdmin = (role: UserRole | undefined): boolean => role === 'admin';
 
 export interface Location {
     lat: number;
