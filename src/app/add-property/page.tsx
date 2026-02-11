@@ -109,7 +109,7 @@ export default function AddPropertyPage() {
                 price: Number(formData.price),
                 priceUnit: formData.priceUnit,
                 category: formData.category,
-                status: 'available',
+                status: 'available' as const,
                 images: images, // الصور المرفوعة من handleImageUpload
                 location: {
                     lat: 31.4431,

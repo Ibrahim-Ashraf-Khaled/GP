@@ -10,10 +10,12 @@ const IS_MOCK_MODE = process.env.NEXT_PUBLIC_IS_MOCK_MODE === 'true';
 
 interface AuthContextType {
     user: User | null;
+    profile: User | null; // Alias for user for compatibility
     loading: boolean;
     login: (email: string, password: string) => Promise<boolean>;
     register: (userData: any) => Promise<boolean>;
     logout: () => void;
+    signOut: () => void; // Alias for logout for compatibility
     isAuthenticated: boolean;
 }
 
@@ -131,7 +133,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                     name: userData.name,
                     email: userData.email,
                     phone: userData.phone,
-                    role: 'مستأجر' as const, // Default role
+                    role: 'tenant' as const, // Default role using UserRole type
                     password: userData.password,
                     favorites: [],
                     unlockedProperties: [],
@@ -169,15 +171,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         window.location.href = '/';
     };
 
-    return (
-        <AuthContext.Provider
-            value={{
-                user,
-                loading,
-                login,
-                register,
-                logout,
-                isAuthenticated: !!user,
+return (
+            <AuthContext.Provider
+                value={{
+                    user,
+                    profile: user, // Alias for compatibility
+                    loading,
+                    login,
+                    register,
+                    logout,
+                    signOut: logout, // Alias for compatibility
+                    isAuthenticated: !!user,
             }}
         >
             {children}

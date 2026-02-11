@@ -2,7 +2,7 @@ import { Property, User, PaymentRequest, Review, Notification } from '@/types';
 import { supabase, STORAGE_BUCKET } from './supabase';
 
 // مفاتيح التخزين
-const STORAGE_KEYS = {
+export const STORAGE_KEYS = {
     PROPERTIES: 'gamasa_properties',
     USERS: 'gamasa_users',
     CURRENT_USER: 'gamasa_current_user',

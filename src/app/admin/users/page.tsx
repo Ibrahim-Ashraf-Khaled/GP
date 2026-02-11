@@ -27,9 +27,9 @@ export default function AdminUsersPage() {
         if (!confirm(currentStatus ? 'هل أنت متأكد من إزالة صلاحيات الإدارة؟' : 'هل أنت متأكد من منح صلاحيات الإدارة؟')) return;
 
         try {
-            await supabaseService.updateUserProfile(id, { is_admin: !currentStatus });
+            await supabaseService.updateUserProfile(id, { role: currentStatus ? 'tenant' : 'admin' });
             // تحديث الواجهة محلياً لتجنب إعادة التحميل
-            setUsers(users.map(u => u.id === id ? { ...u, is_admin: !currentStatus } : u));
+            setUsers(users.map(u => u.id === id ? { ...u, role: currentStatus ? 'tenant' : 'admin' } : u));
         } catch (error) {
             alert('حدث خطأ أثناء التحديث');
         }
@@ -116,7 +116,7 @@ export default function AdminUsersPage() {
 
                                         <td className="p-4">
                                             <div className="flex gap-2">
-                                                {user.is_admin && <span className="bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-300 text-xs px-2 py-1 rounded font-medium">Admin</span>}
+                                                {user.role === 'admin' && <span className="bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-300 text-xs px-2 py-1 rounded font-medium">Admin</span>}
                                                 {user.is_verified && <span className="bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-300 text-xs px-2 py-1 rounded font-medium">موثق</span>}
                                             </div>
                                         </td>
@@ -134,13 +134,13 @@ export default function AdminUsersPage() {
                                                 </button>
 
                                                 <button
-                                                    onClick={() => handleToggleAdmin(user.id, user.is_admin || false)}
-                                                    className={`text-xs px-3 py-1 rounded border transition-colors ${user.is_admin
+                                                    onClick={() => handleToggleAdmin(user.id, user.role === 'admin')}
+                                                    className={`text-xs px-3 py-1 rounded border transition-colors ${user.role === 'admin'
                                                             ? 'border-gray-300 dark:border-gray-500 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-500/20'
                                                             : 'border-amber-200 dark:border-yellow-500/50 text-amber-600 dark:text-yellow-300 hover:bg-amber-50 dark:hover:bg-yellow-500/20'
                                                         }`}
                                                 >
-                                                    {user.is_admin ? 'إزالة Admin' : 'ترقية لـ Admin'}
+                                                    {user.role === 'admin' ? 'إزالة Admin' : 'ترقية لـ Admin'}
                                                 </button>
                                             </div>
                                         </td>

@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { BottomNav } from '@/components/BottomNav';
 import EditProfileModal from '@/components/profile/EditProfileModal';
+import { ROLE_LANDLORD, ROLE_TENANT } from '@/types';
 
 export default function ProfilePage() {
     const { user, profile, signOut, loading: authLoading } = useAuth();
@@ -92,14 +93,14 @@ export default function ProfilePage() {
                         <div className="relative shrink-0">
                             <div className="w-20 h-20 rounded-full bg-gradient-to-tr from-blue-500 to-purple-500 p-[3px]">
                                 <div className="w-full h-full rounded-full bg-white dark:bg-zinc-900 flex items-center justify-center overflow-hidden">
-                                    {profile?.avatar_url ? (
-                                        <img src={profile.avatar_url} alt="" className="w-full h-full object-cover" />
+                                    {profile?.avatar ? (
+                                        <img src={profile.avatar} alt="" className="w-full h-full object-cover" />
                                     ) : (
                                         <span className="material-symbols-outlined text-gray-400 text-4xl">person</span>
                                     )}
                                 </div>
                             </div>
-                            {profile?.is_verified && (
+                            {profile?.isVerified && (
                                 <div className="absolute -bottom-1 -right-1 bg-blue-500 text-white rounded-full p-1 border-4 border-white dark:border-zinc-900 flex items-center justify-center" title="موثق">
                                     <span className="material-symbols-outlined text-[14px]">verified</span>
                                 </div>
@@ -108,19 +109,19 @@ export default function ProfilePage() {
 
                         <div className="flex-1 min-w-0">
                             <h1 className="text-xl font-bold text-gray-900 dark:text-white truncate">
-                                {profile?.full_name || 'مستخدم'}
+                                {profile?.name || 'مستخدم'}
                             </h1>
                             <p className="text-gray-400 text-sm mt-0.5 dir-ltr text-right truncate">
                                 {profile?.phone || 'لا يوجد رقم هاتف'}
                             </p>
                             <div className="flex gap-2 mt-3">
                                 <span className={`text-[10px] px-2.5 py-1 rounded-full font-bold flex items-center gap-1
-                                    ${profile?.role === 'مؤجر'
+                                    ${profile?.role === ROLE_LANDLORD
                                         ? 'bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400'
                                         : 'bg-green-50 dark:bg-green-500/10 text-green-600 dark:text-green-400'}`}
                                 >
-                                    <span className="material-symbols-outlined text-[14px]">{profile?.role === 'مؤجر' ? 'real_estate_agent' : 'person'}</span>
-                                    {profile?.role === 'مؤجر' ? 'صاحب عقار' : 'مستأجر'}
+                                    <span className="material-symbols-outlined text-[14px]">{profile?.role === ROLE_LANDLORD ? 'real_estate_agent' : 'person'}</span>
+                                    {profile?.role === ROLE_LANDLORD ? 'صاحب عقار' : 'مستأجر'}
                                 </span>
                             </div>
                         </div>
@@ -169,7 +170,7 @@ export default function ProfilePage() {
                         />
 
 
-                        {(profile?.role === 'مؤجر' || profile?.is_admin) && (
+                        {(profile?.role === ROLE_LANDLORD || profile?.role === 'admin') && (
                             <MenuLink
                                 href="/my-properties"
                                 icon="real_estate_agent"

@@ -3,10 +3,7 @@ import { supabase, STORAGE_BUCKET, uploadImage, deleteImage } from '@/lib/supaba
 import { Conversation, Message, Profile } from '@/types/messaging';
 
 // === Mock Mode Flag ===
-export const IS_MOCK_MODE =
-  typeof window !== 'undefined'
-    ? window.localStorage.getItem('DEV_MOCK_MODE') === 'true'
-    : process.env.NEXT_PUBLIC_IS_MOCK_MODE === 'true';
+export const IS_MOCK_MODE = process.env.NEXT_PUBLIC_IS_MOCK_MODE === 'true';
 
 // أنواع البيانات
 export interface UserProfile {
@@ -154,6 +151,7 @@ const MOCK_PROPERTIES: PropertyRow[] = [
 // In-memory storage for mock mode changes (resets on refresh)
 const _mockFavorites = new Set<string>();
 const _mockUnlocked = new Set<string>();
+const _mockPayments: any[] = [];
 
 export const supabaseService = {
     // ====== Mock Auth Hub ======
@@ -532,6 +530,21 @@ export const supabaseService = {
 
     async unlockProperty(userId: string, propertyId: string): Promise<void> {
         if (IS_MOCK_MODE) {
+            // Mock mode: Check if payment exists in mock data
+            const validPayment = _mockPayments.find((p: any) => 
+                p.user_id === userId && 
+                p.property_id === propertyId && 
+                p.status === 'approved' && 
+                !p.is_consumed &&
+                p.amount >= 50
+            );
+
+            if (!validPayment) {
+                throw new Error('لا يوجد دفع معتمد لهذا العقار');
+            }
+
+            // Mark payment as consumed
+            validPayment.is_consumed = true;
             _mockUnlocked.add(propertyId);
             return;
         }
@@ -599,8 +612,20 @@ export const supabaseService = {
         amount: number;
         paymentMethod: 'vodafone_cash' | 'instapay' | 'fawry';
         receiptImage?: string;
-    }): Promise<void> {
+}): Promise<void> {
         if (IS_MOCK_MODE) {
+            // Store mock payment for testing
+            _mockPayments.push({
+                id: `mock-payment-${Date.now()}`,
+                user_id: params.userId,
+                property_id: params.propertyId,
+                amount: params.amount,
+                payment_method: params.paymentMethod,
+                receipt_image: params.receiptImage,
+                status: 'pending',
+                is_consumed: false,
+                created_at: new Date().toISOString()
+            });
             return;
         }
 
@@ -1229,7 +1254,19 @@ export const supabaseService = {
         data: import('@/types').Booking | null;
         error: any;
     }> {
-        if (IS_MOCK_MODE) {
+if (IS_MOCK_MODE) {
+            // Mock mode: Basic conflict check
+            const existingBookings: any[] = []; // In real implementation, check against existing bookings
+            const hasConflict = existingBookings.some((b: any) => 
+                b.property_id === bookingData.propertyId &&
+                b.status === 'confirmed' &&
+                !((bookingData.endDate < b.start_date) || (bookingData.startDate > b.end_date))
+            );
+
+            if (hasConflict) {
+                return { data: null, error: { message: 'التواريخ المطلوبة محجوزة بالفعل' } };
+            }
+
             const mockBooking: import('@/types').Booking = {
                 ...bookingData,
                 id: `BK-${Date.now()}`,
@@ -1238,58 +1275,65 @@ export const supabaseService = {
             return { data: mockBooking, error: null };
         }
 
-        const { data, error } = await supabase
-            .from('bookings')
-            .insert({
-                property_id: bookingData.propertyId,
-                user_id: bookingData.userId,
-                start_date: bookingData.startDate,
-                end_date: bookingData.endDate,
-                total_nights: bookingData.totalNights,
-                total_months: bookingData.totalMonths,
-                rental_type: bookingData.rentalType,
-                tenant_name: bookingData.tenantName,
-                tenant_phone: bookingData.tenantPhone,
-                tenant_email: bookingData.tenantEmail,
-                base_price: bookingData.basePrice,
-                service_fee: bookingData.serviceFee,
-                deposit_amount: bookingData.depositAmount,
-                total_amount: bookingData.totalAmount,
-                payment_method: bookingData.paymentMethod,
-                payment_status: bookingData.paymentStatus,
-                payment_proof: bookingData.paymentProof,
-                status: bookingData.status,
-            })
-            .select()
-            .single();
+        // Use atomic booking function to prevent double bookings
+        const { data, error } = await supabase.rpc('create_atomic_booking', {
+            p_property_id: bookingData.propertyId,
+            p_user_id: bookingData.userId,
+            p_start_date: bookingData.startDate,
+            p_end_date: bookingData.endDate,
+            p_total_nights: bookingData.totalNights,
+            p_total_months: bookingData.totalMonths,
+            p_rental_type: bookingData.rentalType,
+            p_tenant_name: bookingData.tenantName,
+            p_tenant_phone: bookingData.tenantPhone,
+            p_tenant_email: bookingData.tenantEmail,
+            p_base_price: bookingData.basePrice,
+            p_service_fee: bookingData.serviceFee,
+            p_deposit_amount: bookingData.depositAmount,
+            p_total_amount: bookingData.totalAmount,
+            p_payment_method: bookingData.paymentMethod,
+            p_payment_status: bookingData.paymentStatus,
+            p_payment_proof: bookingData.paymentProof,
+        });
 
         if (error) {
             return { data: null, error };
         }
 
-        // تحويل أسماء الأعمدة من snake_case إلى camelCase
+// Fetch the complete booking data
+        const { data: fullBooking, error: fetchError } = await supabase
+            .from('bookings')
+            .select('*')
+            .eq('id', data)
+            .single();
+
+        if (fetchError) {
+            return { data: null, error: fetchError };
+        }
+
+// تحويل أسماء الأعمدة من snake_case إلى camelCase
         const booking: import('@/types').Booking = {
-            id: data.id,
-            propertyId: data.property_id,
-            userId: data.user_id,
-            startDate: data.start_date,
-            endDate: data.end_date,
-            totalNights: data.total_nights,
-            totalMonths: data.total_months,
-            rentalType: data.rental_type,
-            tenantName: data.tenant_name,
-            tenantPhone: data.tenant_phone,
-            tenantEmail: data.tenant_email,
-            basePrice: data.base_price,
-            serviceFee: data.service_fee,
-            depositAmount: data.deposit_amount,
-            totalAmount: data.total_amount,
-            paymentMethod: data.payment_method,
-            paymentStatus: data.payment_status,
-            paymentProof: data.payment_proof,
-            status: data.status,
-            createdAt: data.created_at,
-            confirmedAt: data.confirmed_at,
+            id: fullBooking.id,
+            propertyId: fullBooking.property_id,
+            userId: fullBooking.user_id,
+            startDate: fullBooking.start_date,
+            endDate: fullBooking.end_date,
+            totalNights: fullBooking.total_nights,
+            totalMonths: fullBooking.total_months,
+            rentalType: fullBooking.rental_type,
+            tenantName: fullBooking.tenant_name,
+            tenantPhone: fullBooking.tenant_phone,
+            tenantEmail: fullBooking.tenant_email,
+            basePrice: fullBooking.base_price,
+            serviceFee: fullBooking.service_fee,
+            depositAmount: fullBooking.deposit_amount,
+            totalAmount: fullBooking.total_amount,
+            paymentMethod: fullBooking.payment_method,
+            paymentStatus: fullBooking.payment_status,
+            paymentProof: fullBooking.payment_proof,
+            status: fullBooking.status,
+            createdAt: fullBooking.created_at,
+confirmedAt: fullBooking.confirmed_at,
         };
 
         return { data: booking, error: null };

@@ -54,12 +54,14 @@ export default function BookingPageClient({ propertyId, initialProperty }: Booki
   const [rentalConfig] = useState<RentalConfig>({
     type: 'daily' as RentalType,
     pricePerUnit: property.price,
+    minDuration: 1,
+    maxDuration: 30,
   });
 
   // Pre-fill user data if logged in
   useEffect(() => {
     if (user) {
-      setTenantName(user.user_metadata?.full_name || user.email?.split('@')[0] || '');
+      setTenantName(user.name || user.email?.split('@')[0] || '');
       setTenantEmail(user.email || '');
       // Note: Phone number would need to be fetched from profile
     }
@@ -163,7 +165,9 @@ export default function BookingPageClient({ propertyId, initialProperty }: Booki
       }
 
       // Redirect to booking confirmation
-      router.push(`/property/${propertyId}/booking/confirmation?bookingId=${booking.id}`);
+      if (booking) {
+        router.push(`/property/${propertyId}/booking/confirmation?bookingId=${booking.id}`);
+      }
     } catch (err: any) {
       setError(err.message || 'فشل إرسال طلب الحجز. يرجى المحاولة مرة أخرى.');
     } finally {

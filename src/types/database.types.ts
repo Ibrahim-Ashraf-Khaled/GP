@@ -7,27 +7,27 @@ export type PropertyStatus = 'pending' | 'available' | 'rented' | 'rejected';
 
 /** Arabic labels for property category (UI) */
 export const CATEGORY_AR: Record<PropertyCategory, string> = {
-  apartment: 'شقة',
-  villa: 'فيلا',
-  chalet: 'شاليه',
-  studio: 'استوديو',
-  room: 'غرفة',
+    apartment: 'شقة',
+    villa: 'فيلا',
+    chalet: 'شاليه',
+    studio: 'استوديو',
+    room: 'غرفة',
 };
 
 /** Arabic labels for price/booking unit (UI) */
 export const PRICE_UNIT_AR: Record<PriceUnit, string> = {
-  day: 'يوم',
-  week: 'أسبوع',
-  month: 'شهر',
-  season: 'موسم',
+    day: 'يوم',
+    week: 'أسبوع',
+    month: 'شهر',
+    season: 'موسم',
 };
 
 /** Arabic labels for property status (UI) */
 export const STATUS_AR: Record<PropertyStatus, string> = {
-  available: 'متاح',
-  pending: 'قيد المراجعة',
-  rented: 'محجوز',
-  rejected: 'مرفوض',
+    available: 'متاح',
+    pending: 'قيد المراجعة',
+    rented: 'محجوز',
+    rejected: 'مرفوض',
 };
 
 export type Json =
@@ -50,33 +50,29 @@ export interface Database {
                     national_id: string | null;
                     role: 'tenant' | 'landlord' | 'admin';
                     is_verified: boolean;
-                    is_admin: boolean;
-                    updated_at: string;
                     created_at: string;
+                    updated_at: string;
                 };
                 Insert: {
-                    id: string;
-                    full_name?: string | null;
-                    avatar_url?: string | null;
-                    phone?: string | null;
-                    national_id?: string | null;
+                    id?: string;
+                    full_name?: string;
+                    avatar_url?: string;
+                    phone?: string;
+                    national_id?: string;
                     role?: 'tenant' | 'landlord' | 'admin';
                     is_verified?: boolean;
-                    is_admin?: boolean;
-                    updated_at?: string;
                     created_at?: string;
+                    updated_at?: string;
                 };
                 Update: {
                     id?: string;
-                    full_name?: string | null;
-                    avatar_url?: string | null;
-                    phone?: string | null;
-                    national_id?: string | null;
+                    full_name?: string;
+                    avatar_url?: string;
+                    phone?: string;
+                    national_id?: string;
                     role?: 'tenant' | 'landlord' | 'admin';
                     is_verified?: boolean;
-                    is_admin?: boolean;
                     updated_at?: string;
-                    created_at?: string;
                 };
             };
             properties: {
@@ -93,14 +89,14 @@ export interface Database {
                     location_lng: number | null;
                     address: string | null;
                     area: string | null;
-                    bedrooms: number;
-                    bathrooms: number;
+                    bedrooms: number | null;
+                    bathrooms: number | null;
                     floor_area: number | null;
-                    floor_number: number;
-                    features: string[];
-                    images: string[];
+                    floor_number: number | null;
+                    features: string[] | null;
                     owner_phone: string | null;
                     owner_name: string | null;
+                    images: string[];
                     is_verified: boolean;
                     views_count: number;
                     created_at: string;
@@ -110,52 +106,48 @@ export interface Database {
                     id?: string;
                     owner_id: string;
                     title: string;
-                    description?: string | null;
+                    description?: string;
                     price: number;
                     price_unit?: PriceUnit;
                     category: PropertyCategory;
                     status?: PropertyStatus;
-                    location_lat?: number | null;
-                    location_lng?: number | null;
-                    address?: string | null;
-                    area?: string | null;
+                    location_lat?: number;
+                    location_lng?: number;
+                    address?: string;
+                    area?: string;
                     bedrooms?: number;
                     bathrooms?: number;
-                    floor_area?: number | null;
+                    floor_area?: number;
                     floor_number?: number;
                     features?: string[];
+                    owner_phone?: string;
+                    owner_name?: string;
                     images?: string[];
-                    owner_phone?: string | null;
-                    owner_name?: string | null;
                     is_verified?: boolean;
-                    views_count?: number;
                     created_at?: string;
                     updated_at?: string;
                 };
                 Update: {
                     id?: string;
-                    owner_id?: string;
                     title?: string;
-                    description?: string | null;
+                    description?: string;
                     price?: number;
                     price_unit?: PriceUnit;
                     category?: PropertyCategory;
                     status?: PropertyStatus;
-                    location_lat?: number | null;
-                    location_lng?: number | null;
-                    address?: string | null;
-                    area?: string | null;
+                    location_lat?: number;
+                    location_lng?: number;
+                    address?: string;
+                    area?: string;
                     bedrooms?: number;
                     bathrooms?: number;
-                    floor_area?: number | null;
+                    floor_area?: number;
                     floor_number?: number;
                     features?: string[];
+                    owner_phone?: string;
+                    owner_name?: string;
                     images?: string[];
-                    owner_phone?: string | null;
-                    owner_name?: string | null;
                     is_verified?: boolean;
-                    views_count?: number;
-                    created_at?: string;
                     updated_at?: string;
                 };
             };
@@ -166,23 +158,13 @@ export interface Database {
                     user_id: string;
                     start_date: string;
                     end_date: string;
-                    total_nights: number;
-                    total_months: number;
-                    rental_type: 'daily' | 'monthly' | 'seasonal';
-                    tenant_name: string | null;
-                    tenant_phone: string | null;
-                    tenant_email: string | null;
-                    base_price: number | null;
-                    service_fee: number | null;
-                    deposit_amount: number | null;
                     total_price: number;
-                    total_amount: number;
-                    payment_method: 'vodafone_cash' | 'instapay' | 'cash_on_delivery' | null;
-                    payment_status: 'pending' | 'confirmed' | 'failed' | null;
-                    payment_proof: string | null;
                     status: 'pending' | 'confirmed' | 'cancelled' | 'completed';
+                    tenant_name: string;
+                    tenant_phone: string;
+                    tenant_email: string;
                     created_at: string;
-                    confirmed_at: string | null;
+                    updated_at: string;
                 };
                 Insert: {
                     id?: string;
@@ -190,47 +172,18 @@ export interface Database {
                     user_id: string;
                     start_date: string;
                     end_date: string;
-                    total_nights?: number;
-                    total_months?: number;
-                    rental_type?: 'daily' | 'monthly' | 'seasonal';
-                    tenant_name?: string | null;
-                    tenant_phone?: string | null;
-                    tenant_email?: string | null;
-                    base_price?: number | null;
-                    service_fee?: number | null;
-                    deposit_amount?: number | null;
-                    total_price?: number;
-                    total_amount?: number;
-                    payment_method?: 'vodafone_cash' | 'instapay' | 'cash_on_delivery' | null;
-                    payment_status?: 'pending' | 'confirmed' | 'failed' | null;
-                    payment_proof?: string | null;
+                    total_price: number;
                     status?: 'pending' | 'confirmed' | 'cancelled' | 'completed';
+                    tenant_name: string;
+                    tenant_phone: string;
+                    tenant_email: string;
                     created_at?: string;
-                    confirmed_at?: string | null;
+                    updated_at?: string;
                 };
                 Update: {
                     id?: string;
-                    property_id?: string;
-                    user_id?: string;
-                    start_date?: string;
-                    end_date?: string;
-                    total_nights?: number;
-                    total_months?: number;
-                    rental_type?: 'daily' | 'monthly' | 'seasonal';
-                    tenant_name?: string | null;
-                    tenant_phone?: string | null;
-                    tenant_email?: string | null;
-                    base_price?: number | null;
-                    service_fee?: number | null;
-                    deposit_amount?: number | null;
-                    total_price?: number;
-                    total_amount?: number;
-                    payment_method?: 'vodafone_cash' | 'instapay' | 'cash_on_delivery' | null;
-                    payment_status?: 'pending' | 'confirmed' | 'failed' | null;
-                    payment_proof?: string | null;
                     status?: 'pending' | 'confirmed' | 'cancelled' | 'completed';
-                    created_at?: string;
-                    confirmed_at?: string | null;
+                    updated_at?: string;
                 };
             };
             payment_requests: {
@@ -240,11 +193,11 @@ export interface Database {
                     property_id: string;
                     amount: number;
                     payment_method: 'vodafone_cash' | 'instapay' | 'fawry';
-                    receipt_image: string | null;
+                    receipt_image: string;
                     status: 'pending' | 'approved' | 'rejected';
                     admin_note: string | null;
-                    processed_at: string | null;
                     created_at: string;
+                    processed_at?: string;
                 };
                 Insert: {
                     id?: string;
@@ -252,23 +205,17 @@ export interface Database {
                     property_id: string;
                     amount: number;
                     payment_method: 'vodafone_cash' | 'instapay' | 'fawry';
-                    receipt_image?: string | null;
+                    receipt_image: string;
                     status?: 'pending' | 'approved' | 'rejected';
-                    admin_note?: string | null;
-                    processed_at?: string | null;
+                    admin_note?: string;
                     created_at?: string;
+                    processed_at?: string;
                 };
                 Update: {
                     id?: string;
-                    user_id?: string;
-                    property_id?: string;
-                    amount?: number;
-                    payment_method?: 'vodafone_cash' | 'instapay' | 'fawry';
-                    receipt_image?: string | null;
                     status?: 'pending' | 'approved' | 'rejected';
-                    admin_note?: string | null;
-                    processed_at?: string | null;
-                    created_at?: string;
+                    admin_note?: string;
+                    processed_at?: string;
                 };
             };
             reviews: {
@@ -285,16 +232,13 @@ export interface Database {
                     property_id: string;
                     user_id: string;
                     rating: number;
-                    comment?: string | null;
+                    comment?: string;
                     created_at?: string;
                 };
                 Update: {
                     id?: string;
-                    property_id?: string;
-                    user_id?: string;
                     rating?: number;
-                    comment?: string | null;
-                    created_at?: string;
+                    comment?: string;
                 };
             };
             notifications: {
@@ -302,68 +246,67 @@ export interface Database {
                     id: string;
                     user_id: string;
                     title: string;
-                    message: string | null;
-                    type: 'success' | 'info' | 'warning' | 'error';
-                    is_read: boolean;
+                    message: string;
+                    type: 'info' | 'success' | 'warning' | 'error';
                     link: string | null;
+                    is_read: boolean;
                     created_at: string;
                 };
                 Insert: {
                     id?: string;
                     user_id: string;
                     title: string;
-                    message?: string | null;
-                    type: 'success' | 'info' | 'warning' | 'error';
+                    message: string;
+                    type?: 'info' | 'success' | 'warning' | 'error';
+                    link?: string;
                     is_read?: boolean;
-                    link?: string | null;
                     created_at?: string;
                 };
                 Update: {
                     id?: string;
-                    user_id?: string;
-                    title?: string;
-                    message?: string | null;
-                    type?: 'success' | 'info' | 'warning' | 'error';
                     is_read?: boolean;
-                    link?: string | null;
-                    created_at?: string;
                 };
             };
             favorites: {
                 Row: {
+                    id: string;
                     user_id: string;
                     property_id: string;
                     created_at: string;
                 };
                 Insert: {
+                    id?: string;
                     user_id: string;
                     property_id: string;
                     created_at?: string;
                 };
                 Update: {
-                    user_id?: string;
-                    property_id?: string;
-                    created_at?: string;
+                    id?: string;
                 };
             };
             unlocked_properties: {
                 Row: {
+                    id: string;
                     user_id: string;
                     property_id: string;
-                    unlocked_at: string;
+                    payment_id: string;
+                    unlocked_at?: string;
                 };
                 Insert: {
-                    user_id: string;
-                    property_id: string;
+                    id?: string;
+                    user_id?: string;
+                    property_id?: string;
+                    payment_id?: string;
                     unlocked_at?: string;
                 };
                 Update: {
+                    id?: string;
                     user_id?: string;
                     property_id?: string;
+                    payment_id?: string;
                     unlocked_at?: string;
                 };
             };
-        };
             conversations: {
                 Row: {
                     id: string;

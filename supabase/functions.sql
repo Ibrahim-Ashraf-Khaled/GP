@@ -98,6 +98,71 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- =============================================
+
+-- 6. Atomic Booking Creation Function (Prevents Double Bookings)
+-- Creates booking only if dates are available, using row-level locking
+CREATE OR REPLACE FUNCTION create_atomic_booking(
+  p_property_id UUID,
+  p_user_id UUID,
+  p_start_date DATE,
+  p_end_date DATE,
+  p_total_nights INTEGER DEFAULT NULL,
+  p_total_months INTEGER DEFAULT NULL,
+  p_rental_type TEXT DEFAULT 'daily',
+  p_tenant_name TEXT,
+  p_tenant_phone TEXT,
+  p_tenant_email TEXT DEFAULT NULL,
+  p_base_price DECIMAL,
+  p_service_fee DECIMAL,
+  p_deposit_amount DECIMAL DEFAULT NULL,
+  p_total_amount DECIMAL,
+  p_payment_method TEXT DEFAULT 'cash_on_delivery',
+  p_payment_status TEXT DEFAULT 'pending',
+  p_payment_proof TEXT DEFAULT NULL
+) RETURNS UUID AS $$
+DECLARE
+  v_booking_id UUID;
+  v_conflict_count INTEGER;
+BEGIN
+  -- Step 1: Check for date conflicts with row-level locking
+  SELECT COUNT(*) INTO v_conflict_count
+  FROM bookings
+  WHERE property_id = p_property_id
+    AND status IN ('confirmed', 'pending')
+    AND (
+      (p_start_date <= end_date AND p_end_date >= start_date)
+    )
+  FOR UPDATE; -- Lock conflicting rows
+
+  -- Step 2: Raise exception if dates conflict
+  IF v_conflict_count > 0 THEN
+    RAISE EXCEPTION 'Booking dates conflict with existing booking';
+  END IF;
+
+  -- Step 3: Create the booking atomically
+  INSERT INTO bookings (
+    property_id, user_id, start_date, end_date, total_nights, total_months,
+    rental_type, tenant_name, tenant_phone, tenant_email, base_price,
+    service_fee, deposit_amount, total_amount, payment_method, payment_status,
+    payment_proof, status, created_at
+  ) VALUES (
+    p_property_id, p_user_id, p_start_date, p_end_date, p_total_nights, p_total_months,
+    p_rental_type, p_tenant_name, p_tenant_phone, p_tenant_email, p_base_price,
+    p_service_fee, p_deposit_amount, p_total_amount, p_payment_method, p_payment_status,
+    p_payment_proof, 'pending', NOW()
+  ) RETURNING id INTO v_booking_id;
+
+  -- Step 4: Return the new booking ID
+  RETURN v_booking_id;
+
+EXCEPTION
+  WHEN OTHERS THEN
+    -- Rollback on any error
+    RAISE;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- =============================================
 -- كيفية الإضافة في Supabase:
 -- 1. اذهب إلى SQL Editor في القائمة الجانبية.
 -- 2. اضغط على "New query".
