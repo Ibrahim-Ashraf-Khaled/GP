@@ -1,4 +1,5 @@
 import { Metadata } from 'next';
+import JsonLd from '@/components/JsonLd';
 import { supabaseService } from '@/services/supabaseService';
 import SearchPageClient from './client';
 import { Property } from '@/types';
@@ -97,22 +98,22 @@ async function getInitialProperties(searchParams: {
 export default async function SearchPage({
   searchParams,
 }: {
-  searchParams: {
+  searchParams: Promise<{
     q?: string;
     category?: string;
     minPrice?: string;
     maxPrice?: string;
     bedrooms?: string;
     area?: string;
-  };
+  }>;
 }) {
   // Server-side data fetching for initial load
-  const initialProperties = await getInitialProperties(searchParams);
+  const initialProperties = await getInitialProperties(await searchParams);
 
   return (
     <SearchPageClient
       initialProperties={initialProperties}
-      initialSearchParams={searchParams}
+      initialSearchParams={await searchParams}
     />
   );
 }

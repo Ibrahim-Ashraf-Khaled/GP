@@ -117,6 +117,8 @@ const recentProperties = [
   },
 ];
 
+import JsonLd from '@/components/JsonLd';
+
 export const metadata: Metadata = {
   title: 'عقارات جمصة - ابحث عن شاليهات، فيلات، وشقق للإيجار',
   description: 'اكتشف أفضل العقارات للإيجار في جمصة. شاليهات، فيلات، وشقق عصرية بأسعار تنافسية. احجز الآن واستمتع بإجازتك.',
@@ -130,8 +132,36 @@ export const metadata: Metadata = {
 };
 
 export default function HomePage() {
+  const organizationData = {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "name": "عقارات جمصة",
+    "url": "https://gamasa-properties.vercel.app",
+    "logo": "https://gamasa-properties.vercel.app/icons/icon-512x512.png",
+    "description": "منصة تأجير العقارات الأولى في جمصة - شقق، غرف، فيلات للإيجار بأسعار مناسبة.",
+    "address": {
+      "@type": "PostalAddress",
+      "addressLocality": "جمصة",
+      "addressCountry": "EG"
+    }
+  };
+
+  const websiteData = {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    "name": "عقارات جمصة",
+    "url": "https://gamasa-properties.vercel.app",
+    "potentialAction": {
+      "@type": "SearchAction",
+      "target": "https://gamasa-properties.vercel.app/search?q={search_term_string}",
+      "query-input": "required name=search_term_string"
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-black pb-24">
+      <JsonLd data={organizationData} />
+      <JsonLd data={websiteData} />
       {/* Static Header (scrolls away) */}
       <Header />
 

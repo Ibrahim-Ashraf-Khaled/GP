@@ -1,7 +1,7 @@
 import { MetadataRoute } from 'next';
 
 export default function robots(): MetadataRoute.Robots {
-    const BASE_URL = 'https://gamasa-properties.com';
+    const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://gamasa-properties.vercel.app';
 
     return {
         rules: {

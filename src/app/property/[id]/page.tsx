@@ -54,9 +54,14 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
     const title = `${property.title} - ${property.price} ج.م | عقارات جمصة`;
     const description = `${CATEGORY_AR[property.category]} للإيجار في ${property.location.address}. ${property.bedrooms} غرف، ${property.bathrooms} حمام. ${property.description.substring(0, 100)}...`;
 
+    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://gamasa-properties.vercel.app';
+
     return {
         title: title,
         description: description,
+        alternates: {
+            canonical: `${baseUrl}/property/${property.id}`,
+        },
         openGraph: {
             title: title,
             description: description,
@@ -71,6 +76,8 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
     };
 }
 
+import JsonLd from '@/components/JsonLd';
+
 export default async function PropertyPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = await params;
 
@@ -83,5 +90,32 @@ export default async function PropertyPage({ params }: { params: Promise<{ id: s
         notFound();
     }
 
-    return <ClientPropertyDetails initialProperty={property} />;
+    const listingData = {
+        "@context": "https://schema.org",
+        "@type": "RealEstateListing",
+        "name": property.title,
+        "description": property.description,
+        "url": `https://gamasa-properties.vercel.app/property/${property.id}`,
+        "image": property.images,
+        "datePosted": property.createdAt,
+        "address": {
+            "@type": "PostalAddress",
+            "addressLocality": property.location.area,
+            "addressRegion": "جمصة",
+            "addressCountry": "EG"
+        },
+        "offers": {
+            "@type": "Offer",
+            "price": property.price,
+            "priceCurrency": "EGP",
+            "availability": "https://schema.org/InStock"
+        }
+    };
+
+    return (
+        <>
+            <JsonLd data={listingData} />
+            <ClientPropertyDetails initialProperty={property} />
+        </>
+    );
 }

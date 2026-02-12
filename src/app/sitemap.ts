@@ -1,7 +1,7 @@
 import { MetadataRoute } from 'next';
 import { supabaseService } from '@/services/supabaseService';
 
-const BASE_URL = 'https://gamasa-properties.vercel.app';
+const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://gamasa-properties.vercel.app';
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // 1. Fetch only "available" properties
@@ -10,7 +10,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
     // 2. Generate dynamic property URLs
     const propertyUrls = properties.map((prop) => ({
-        url: `${BASE_URL}/properties/${prop.id}`,
+        url: `${BASE_URL}/property/${prop.id}`,
         lastModified: new Date(prop.created_at),
         changeFrequency: 'weekly' as const,
         priority: 0.8,
