@@ -3,7 +3,8 @@
 
 import { describe, it, expect, beforeEach } from '@jest/globals';
 import { supabaseService } from '../src/services/supabaseService';
-import { validateDateString, validateUUID } from '../src/utils/validation';
+import { validateDateString, validateUUID, sanitizeText } from '../src/utils/validation';
+
 
 describe('SQL Injection Security Tests', () => {
   describe('Input Validation Functions', () => {
@@ -148,7 +149,7 @@ describe('SQL Injection Security Tests', () => {
 
       for (const text of maliciousTexts) {
         // Should sanitize but preserve content
-        const sanitized = require('@/utils/validation').sanitizeText(text);
+        const sanitized = sanitizeText(text);
         expect(sanitized).not.toContain('<');
         expect(sanitized).not.toContain('>');
         expect(sanitized).toContain('Property');

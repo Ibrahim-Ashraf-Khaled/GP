@@ -26,12 +26,11 @@ export default function SignUpForm({ onSwitchToLogin }: { onSwitchToLogin: () =>
 
         const formData = new FormData(e.currentTarget);
         const fullName = formData.get('fullname') as string;
-        const phone = formData.get('phone') as string;
         const email = formData.get('email') as string;
         const password = formData.get('password') as string;
 
         try {
-            const { error: signUpError } = await signUp(email, password, fullName, phone, role);
+            const { error: signUpError } = await signUp(email, password, fullName);
             if (signUpError) {
                 setError(signUpError.message);
                 return;

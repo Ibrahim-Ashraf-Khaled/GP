@@ -234,6 +234,7 @@ export default function BookingPageClient({ propertyId, initialProperty }: Booki
 
             {/* Date Selection */}
             <DateSelector
+              rentalConfig={rentalConfig}
               startDate={startDate}
               endDate={endDate}
               onStartDateChange={setStartDate}
@@ -246,9 +247,9 @@ export default function BookingPageClient({ propertyId, initialProperty }: Booki
               tenantName={tenantName}
               tenantPhone={tenantPhone}
               tenantEmail={tenantEmail}
-              onTenantNameChange={setTenantName}
-              onTenantPhoneChange={setTenantPhone}
-              onTenantEmailChange={setTenantEmail}
+              onNameChange={setTenantName}
+              onPhoneChange={setTenantPhone}
+              onEmailChange={setTenantEmail}
             />
 
             {/* Payment Methods */}
@@ -262,8 +263,13 @@ export default function BookingPageClient({ propertyId, initialProperty }: Booki
           <div className="space-y-6">
             {/* Price Breakdown */}
             <PriceBreakdown
-              priceDetails={priceDetails}
-              loading={loading}
+              rentalType={rentalConfig.type}
+              duration={priceDetails.duration}
+              pricePerUnit={rentalConfig.pricePerUnit}
+              basePrice={priceDetails.basePrice}
+              serviceFee={priceDetails.serviceFee}
+              depositAmount={priceDetails.depositAmount}
+              totalAmount={priceDetails.totalAmount}
             />
 
             {/* Error Message */}

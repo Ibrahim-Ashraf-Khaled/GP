@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useUser } from '@/hooks/useUser';
+import { useAuth } from '@/context/AuthContext';
 import {
     getAllNotifications,
     markNotificationAsRead,
@@ -12,7 +12,7 @@ import NotificationCard from '@/components/notifications/NotificationCard';
 import EmptyState from '@/components/notifications/EmptyState';
 
 export default function NotificationsPage() {
-    const { user } = useUser();
+    const { user, loading: authLoading } = useAuth();
     const [notifications, setNotifications] = useState<Notification[]>([]);
     const [unreadCount, setUnreadCount] = useState(0);
     const [isLoading, setIsLoading] = useState(true);

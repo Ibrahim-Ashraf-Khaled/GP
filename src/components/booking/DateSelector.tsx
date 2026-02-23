@@ -7,6 +7,7 @@ interface DateSelectorProps {
     rentalConfig: RentalConfig;
     startDate: Date | null;
     endDate: Date | null;
+    minDate?: Date; // allow parent to restrict earliest selectable day
     onStartDateChange: (date: Date) => void;
     onEndDateChange: (date: Date) => void;
     onMonthsChange?: (months: number) => void;
@@ -52,6 +53,9 @@ export default function DateSelector({
 
     // الحصول على الحد الأدنى لتاريخ البداية (اليوم)
     const getMinStartDate = () => {
+        if (minDate) {
+            return formatDate(minDate);
+        }
         const today = new Date();
         return formatDate(today);
     };

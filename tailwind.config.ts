@@ -1,3 +1,4 @@
+import forms from "@tailwindcss/forms";
 import type { Config } from "tailwindcss";
 
 const config: Config = {
@@ -29,7 +30,10 @@ const config: Config = {
         },
     },
     plugins: [
-        require("@tailwindcss/forms"),
+        // convert to ESM import
+        forms,
     ],
 };
+
+
 export default config;

@@ -134,7 +134,7 @@ export default function MyPropertiesPage() {
             }
         ];
 
-        // @ts-ignore
+        // @ts-expect-error -- mocks types are loose but we know they work
         mocks.forEach(m => addProperty(m));
         loadProperties();
     };

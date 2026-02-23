@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { supabaseService } from '@/services/supabaseService';
+import { ROUTES } from '@/lib/routes';
 import { Booking } from '@/types';
 import Image from 'next/image';
 
@@ -280,10 +281,10 @@ export default function ConfirmationPage() {
 
                 {/* أزرار الإجراءات */}
                 <div className="action-buttons">
-                    <button onClick={() => router.push('/profile/bookings')} className="btn-primary">
+                    <button onClick={() => router.push(ROUTES.BOOKINGS)} className="btn-primary">
                         عرض حجوزاتي
                     </button>
-                    <button onClick={() => router.push('/')} className="btn-secondary">
+                    <button onClick={() => router.push(ROUTES.HOME)} className="btn-secondary">
                         العودة للرئيسية
                     </button>
                 </div>

@@ -52,6 +52,16 @@ export default function SearchFilters({ onFilterChange, initialFilters = {} }: S
                         setSelectedArea('الكل');
                         setCategories('');
                         setSelectedFeatures([]);
+
+                        // propagate cleared filters to parent
+                        onFilterChange({
+                            maxPrice: 5000,
+                            bedrooms: 0,
+                            bathrooms: 0,
+                            area: 'الكل',
+                            category: '',
+                            features: [],
+                        });
                     }}
                     className="text-xs text-primary font-bold hover:underline"
                 >

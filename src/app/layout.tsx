@@ -3,6 +3,7 @@ import { Noto_Sans_Arabic, Inter } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
 import IOSInstallPrompt from "@/components/IOSInstallPrompt";
+import { AuthProvider } from '@/context/AuthContext';
 
 const notoSansArabic = Noto_Sans_Arabic({
   subsets: ["arabic"],
@@ -79,10 +80,12 @@ export default function RootLayout({
         />
       </head>
       <body className={`${notoSansArabic.variable} ${inter.variable} font-sans antialiased`}>
-        <Providers>
-          {children}
-          <IOSInstallPrompt />
-        </Providers>
+        <AuthProvider>
+          <Providers>
+            {children}
+            <IOSInstallPrompt />
+          </Providers>
+        </AuthProvider>
       </body>
     </html>
   );

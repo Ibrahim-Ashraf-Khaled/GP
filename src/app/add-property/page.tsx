@@ -255,7 +255,8 @@ export default function AddPropertyPage() {
     }
 
     return (
-        <main className="min-h-screen bg-gray-50 dark:bg-black pb-32">
+        <ProtectedRoute>
+            <main className="min-h-screen bg-gray-50 dark:bg-black pb-32">
             {/* Header */}
             <header className="sticky top-0 z-40 bg-white/80 dark:bg-black/80 backdrop-blur-xl border-b border-gray-200 dark:border-white/10">
                 <div className="max-w-2xl mx-auto px-4 py-4">
@@ -533,5 +534,6 @@ export default function AddPropertyPage() {
                 </div>
             </div>
         </main>
+    </ProtectedRoute>
     );
 }

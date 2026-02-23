@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { uploadImage, unlockProperty, addNotification } from '@/lib/storage';
-import { useUser } from '@/hooks/useUser';
+import { useAuth } from '@/context/AuthContext';
 
 interface UnlockModalProps {
     propertyId: string;
@@ -11,7 +11,7 @@ interface UnlockModalProps {
 }
 
 export function UnlockModal({ propertyId, onClose, onSuccess }: UnlockModalProps) {
-    const { user } = useUser();
+    const { user } = useAuth();
     const [file, setFile] = useState<File | null>(null);
     const [uploading, setUploading] = useState(false);
     const [step, setStep] = useState(1); // 1: instructions, 2: upload, 3: success

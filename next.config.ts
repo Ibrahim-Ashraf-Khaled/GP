@@ -1,4 +1,4 @@
-/// <reference path="./next-pwa.d.ts" />
+import type {} from "./next-pwa"; // bring types without triple-slash
 import type { NextConfig } from "next";
 import withPWAInit from "next-pwa";
 

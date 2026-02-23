@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, type FormEvent } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
 import { GlassCard, GlassInput, GlassButton } from '@/components/ui/glass';
@@ -13,7 +13,7 @@ export default function AuthForm() {
     const { signIn, signUp } = useAuth();
     const router = useRouter();
 
-    const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         setLoading(true);
         setError(null);
@@ -22,7 +22,6 @@ export default function AuthForm() {
         const formData = new FormData(e.currentTarget);
         const email = formData.get('email') as string;
         const password = formData.get('password') as string;
-        const fullName = formData.get('full_name') as string;
 
         try {
             if (isLogin) {
@@ -37,6 +36,7 @@ export default function AuthForm() {
                 }
                 router.push('/');
             } else {
+                const fullName = formData.get('full_name') as string;
                 const { error: signUpError } = await signUp(email, password, fullName);
                 if (signUpError) {
                     setError(signUpError.message);
@@ -70,14 +70,24 @@ export default function AuthForm() {
 
             <form onSubmit={handleSubmit} className="space-y-4">
                 {!isLogin && (
-                    <GlassInput
-                        label="الاسم الكامل"
-                        name="full_name"
-                        type="text"
-                        required
-                        placeholder="أحمد محمد"
-                        icon={<span className="material-symbols-outlined text-gray-400">person</span>}
-                    />
+                    <>
+                        <GlassInput
+                            label="الاسم الكامل"
+                            name="full_name"
+                            type="text"
+                            required
+                            placeholder="أحمد محمد"
+                            icon={<span className="material-symbols-outlined text-gray-400">person</span>}
+                        />
+                        <GlassInput
+                            label="رقم الهاتف"
+                            name="phone"
+                            type="tel"
+                            required
+                            placeholder="010xxxxxxxx"
+                            icon={<span className="material-symbols-outlined text-gray-400">smartphone</span>}
+                        />
+                    </>
                 )}
 
                 <GlassInput

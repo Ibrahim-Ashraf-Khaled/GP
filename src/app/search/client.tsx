@@ -46,6 +46,7 @@ export default function SearchPageClient({
   // Update URL when filters change (triggers server re-fetch)
   const handleFilterChange = (newFilters: typeof activeFilters) => {
     setActiveFilters(newFilters);
+    setLoading(true);
     
     // Build new URL with filters
     const params = new URLSearchParams();
@@ -64,7 +65,8 @@ export default function SearchPageClient({
   // Handle search query change
   const handleSearch = (query: string) => {
     setSearchQuery(query);
-    
+    setLoading(true);
+
     const params = new URLSearchParams(searchParams.toString());
     if (query) {
       params.set('q', query);
@@ -90,6 +92,12 @@ export default function SearchPageClient({
     
     setSearchQuery(currentParams.q || '');
   }, [searchParams]);
+
+  // sync incoming props from server after navigation
+  useEffect(() => {
+    setProperties(initialProperties);
+    setLoading(false);
+  }, [initialProperties]);
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-black pb-24">
@@ -154,15 +162,8 @@ export default function SearchPageClient({
       {showFilters && (
         <div className="px-4 pb-4 max-w-5xl mx-auto">
           <SearchFilters
-            filters={activeFilters}
-            onFiltersChange={handleFilterChange}
-            onClear={() => handleFilterChange({
-              category: 'all',
-              minPrice: '',
-              maxPrice: '',
-              bedrooms: '',
-              area: 'all',
-            })}
+            initialFilters={activeFilters}
+            onFilterChange={handleFilterChange}
           />
         </div>
       )}
@@ -172,7 +173,13 @@ export default function SearchPageClient({
         {viewMode === 'list' ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {properties.map((property) => (
-              <PropertyCard key={property.id} {...property} />
+              <PropertyCard
+                key={property.id}
+                {...property}
+                // convert location object to string address for the card
+                location={property.location?.address || ''}
+                image={(property as any).images?.[0] || '/images/placeholder.jpg'}
+              />
             ))}
           </div>
         ) : (

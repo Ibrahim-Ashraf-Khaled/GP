@@ -35,7 +35,7 @@ const DEFAULT_CENTER: [number, number] = [31.4456, 31.5477];
 export default function PropertyMap({ properties, center = DEFAULT_CENTER, zoom = 14 }: PropertyMapProps) {
     useEffect(() => {
         // Fix Leaflet's default icon path issues
-        // @ts-ignore
+        // @ts-expect-error -- leaflet typings omit this private method
         delete L.Icon.Default.prototype._getIconUrl;
         L.Icon.Default.mergeOptions({
             iconRetinaUrl,
