@@ -1,13 +1,14 @@
 'use client';
 
 import { useSearchParams } from 'next/navigation';
+import { Suspense } from 'react';
 import SignUpForm from '@/components/auth/SignUpForm';
 import LoginForm from '@/components/auth/LoginForm';
 import ResetPasswordForm from '@/components/auth/ResetPasswordForm';
 
 type AuthView = 'login' | 'signup' | 'reset';
 
-export default function AuthPage() {
+function AuthPageContent() {
     const searchParams = useSearchParams();
     const mode = searchParams.get('mode') as AuthView | null;
     const view: AuthView = mode || 'login';
@@ -30,10 +31,18 @@ export default function AuthPage() {
             )}
 
             {view === 'reset' && (
-                <div className="w-full flex justify-center">
+                <div className="relative flex min-h-screen w-full flex-col overflow-x-hidden max-w-md mx-auto bg-background-light dark:bg-background-dark shadow-xl min-[450px]:min-h-[500px] min-[450px]:my-8 min-[450px]:rounded-2xl">
                     <ResetPasswordForm onSwitchToLogin={() => window.history.pushState(null, '', '/auth?mode=login')} />
                 </div>
             )}
         </div>
+    );
+}
+
+export default function AuthPage() {
+    return (
+        <Suspense fallback={null}>
+            <AuthPageContent />
+        </Suspense>
     );
 }

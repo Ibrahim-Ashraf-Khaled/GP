@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useAuth } from '@/context/AuthContext';
+import { useAuth } from '@/hooks/useAuth';
 import { useRouter } from 'next/navigation';
 
 export default function SignUpForm({ onSwitchToLogin }: { onSwitchToLogin: () => void }) {
@@ -28,17 +28,24 @@ export default function SignUpForm({ onSwitchToLogin }: { onSwitchToLogin: () =>
         const fullName = formData.get('fullname') as string;
         const email = formData.get('email') as string;
         const password = formData.get('password') as string;
+        const phone = formData.get('phone') as string;
 
         try {
-            const { error: signUpError } = await signUp(email, password, fullName);
+            const { error: signUpError } = await signUp(email, password, fullName, phone, role);
             if (signUpError) {
-                setError(signUpError.message);
+                const errMsg = signUpError.message;
+                if (errMsg.includes('already registered') || errMsg.includes('already exists')) {
+                    setError('هذا البريد الإلكتروني مسجل بالفعل');
+                } else if (errMsg.includes('Password should be')) {
+                    setError('كلمة المرور يجب أن تكون 6 أحرف على الأقل');
+                } else {
+                    setError(errMsg);
+                }
                 return;
             }
-            // If signup successful, we can optionally redirect or show success
-            // For Supabase, usually you are logged in or allow email confirmation.
-            // We'll redirect to home.
-            router.push('/');
+            const params = new URLSearchParams(window.location.search);
+            const redirectTo = params.get('redirect') || '/';
+            router.replace(redirectTo);
         } catch (err) {
             setError('حدث خطأ غير متوقع');
             console.error(err);
@@ -150,7 +157,7 @@ export default function SignUpForm({ onSwitchToLogin }: { onSwitchToLogin: () =>
                 {/* Email Field */}
                 <div className="flex flex-col gap-2">
                     <label className="text-slate-900 dark:text-white text-base font-semibold" htmlFor="email">
-                        البريد الإلكتروني <span className="text-slate-400 text-sm font-normal">(اختياري)</span>
+                        البريد الإلكتروني
                     </label>
                     <div className="relative">
                         <input
@@ -159,6 +166,7 @@ export default function SignUpForm({ onSwitchToLogin }: { onSwitchToLogin: () =>
                             name="email"
                             placeholder="example@mail.com"
                             type="email"
+                            required
                         />
                         <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 material-symbols-outlined pointer-events-none">
                             mail

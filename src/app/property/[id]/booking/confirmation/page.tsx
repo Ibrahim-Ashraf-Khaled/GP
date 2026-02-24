@@ -1,14 +1,14 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useAuth } from '@/context/AuthContext';
+import { useAuth } from '@/hooks/useAuth';
 import { supabaseService } from '@/services/supabaseService';
 import { ROUTES } from '@/lib/routes';
 import { Booking } from '@/types';
 import Image from 'next/image';
 
-export default function ConfirmationPage() {
+function ConfirmationPageContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const { user } = useAuth();
@@ -597,5 +597,13 @@ export default function ConfirmationPage() {
                 }
             `}</style>
         </div>
+    );
+}
+
+export default function ConfirmationPage() {
+    return (
+        <Suspense fallback={<div className="min-h-screen flex items-center justify-center">جاري التحميل...</div>}>
+            <ConfirmationPageContent />
+        </Suspense>
     );
 }

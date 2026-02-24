@@ -1,18 +1,8 @@
-import type {} from "./next-pwa"; // bring types without triple-slash
 import type { NextConfig } from "next";
-import withPWAInit from "next-pwa";
-
-const withPWA = withPWAInit({
-  dest: "public",
-  register: true,
-  skipWaiting: true,
-  disable: process.env.NODE_ENV === "development",
-});
+import { withSerwist } from "@serwist/turbopack";
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
-  // Use Webpack instead of Turbopack for PWA compatibility
-  turbopack: {},
   images: {
     remotePatterns: [
       {
@@ -27,4 +17,4 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default withPWA(nextConfig);
+export default withSerwist(nextConfig);

@@ -5,9 +5,11 @@ import Link from 'next/link';
 import Navbar from '@/components/Navbar';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import { AREAS, FEATURES, PropertyCategory, PriceUnit, CATEGORY_AR, PRICE_UNIT_AR } from '@/types';
-import { addProperty, getCurrentUser, addNotification, uploadImage } from '@/lib/storage';
+import { supabaseService } from '@/services/supabaseService';
+import { useAuth } from '@/hooks/useAuth';
 
 export default function AddPropertyPage() {
+    const { user } = useAuth();
     const [step, setStep] = useState(1);
     const [loading, setLoading] = useState(false);
     const [uploading, setUploading] = useState(false);
@@ -33,15 +35,14 @@ export default function AddPropertyPage() {
 
     // Auto-fill owner information from current user
     useEffect(() => {
-        const user = getCurrentUser();
         if (user) {
             setFormData(prev => ({
                 ...prev,
-                ownerName: user.name,
-                ownerPhone: user.phone,
+                ownerName: user.name || '',
+                ownerPhone: user.phone || '',
             }));
         }
-    }, []);
+    }, [user]);
 
     const [images, setImages] = useState<string[]>([]);
 
@@ -50,13 +51,13 @@ export default function AddPropertyPage() {
 
     const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = e.target.files;
-        if (!files) return;
+        if (!files || !user) return;
 
         setUploading(true);
         try {
-            const uploadPromises = Array.from(files).map(file => uploadImage(file));
-            const distinctUrls = await Promise.all(uploadPromises);
-            setImages(prev => [...prev, ...distinctUrls]);
+            const fileArray = Array.from(files);
+            const urls = await supabaseService.uploadPropertyImages(fileArray, user.id);
+            setImages(prev => [...prev, ...urls]);
         } catch (error) {
             console.error('Upload failed:', error);
             alert('حدث خطأ أثناء رفع الصور. يرجى المحاولة مرة أخرى.');
@@ -88,8 +89,6 @@ export default function AddPropertyPage() {
         setValidationErrors([]);
 
         try {
-            const user = getCurrentUser();
-
             if (!user) {
                 alert('يجب تسجيل الدخول أولاً');
                 return;
@@ -107,37 +106,28 @@ export default function AddPropertyPage() {
                 title: formData.title,
                 description: formData.description,
                 price: Number(formData.price),
-                priceUnit: formData.priceUnit,
+                price_unit: formData.priceUnit,
                 category: formData.category,
-                status: 'available' as const,
-                images: images, // الصور المرفوعة من handleImageUpload
-                location: {
-                    lat: 31.4431,
-                    lng: 31.5344,
-                    address: formData.address,
-                    area: formData.selectedArea,
-                },
-                ownerPhone: formData.ownerPhone,
-                ownerId: user.id,
-                ownerName: formData.ownerName,
+                address: formData.address,
+                area: formData.selectedArea,
+                owner_phone: formData.ownerPhone,
+                owner_name: formData.ownerName,
                 features: formData.features,
                 bedrooms: formData.bedrooms,
                 bathrooms: formData.bathrooms,
-                area: Number(formData.area),
-                floor: formData.floor,
-                isVerified: false,
+                floor_area: Number(formData.area),
+                floor_number: formData.floor,
             };
 
             // حفظ العقار
-            const newProperty = await addProperty(propertyToAdd);
+            const newProperty = await supabaseService.createFullProperty(propertyToAdd, [], user.id);
 
             // إضافة إشعار
-            addNotification({
+            await supabaseService.createNotification({
                 userId: user.id,
                 title: 'تم إضافة عقارك بنجاح!',
                 message: `عقارك "${formData.title}" قيد المراجعة من الإدارة.`,
-                type: 'success',
-                link: `/property/${newProperty.id}`,
+                type: 'success'
             });
 
             setSuccess(true);
@@ -225,7 +215,6 @@ export default function AddPropertyPage() {
                             onClick={() => {
                                 setSuccess(false);
                                 setStep(1);
-                                const user = getCurrentUser();
                                 setFormData({
                                     title: '',
                                     description: '',

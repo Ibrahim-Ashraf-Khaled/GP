@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useAuth } from '@/context/AuthContext';
+import { useAuth } from '@/hooks/useAuth';
 import { useRouter } from 'next/navigation';
 
 export default function LoginForm({
@@ -14,7 +14,7 @@ export default function LoginForm({
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [showPassword, setShowPassword] = useState(false);
-    const { signIn, signInWithGoogle, signInWithFacebook } = useAuth();
+    const { signIn, signInWithGoogle, signInWithFacebook, signInWithApple } = useAuth();
     const router = useRouter();
 
     const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -36,7 +36,9 @@ export default function LoginForm({
                 );
                 return;
             }
-            router.push('/');
+            const params = new URLSearchParams(window.location.search);
+            const redirectTo = params.get('redirect') || '/';
+            router.replace(redirectTo);
         } catch (err) {
             setError('حدث خطأ غير متوقع');
             console.error(err);
@@ -188,6 +190,7 @@ export default function LoginForm({
                         </button>
                         {/* Apple */}
                         <button
+                            onClick={() => signInWithApple()}
                             className="h-14 flex items-center justify-center rounded-xl border border-border-light dark:border-border-dark bg-white dark:bg-surface-dark hover:bg-gray-50 dark:hover:bg-white/5 transition-colors"
                             type="button"
                         >

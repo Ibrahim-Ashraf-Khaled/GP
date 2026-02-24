@@ -18,6 +18,63 @@ describe('Payment Security Tests', () => {
     }
   });
 
+  describe('CreatePaymentRequest Validations', () => {
+    it('should throw if amount is less than minimum', async () => {
+      await expect(
+        supabaseService.createPaymentRequest({
+          userId: testUserId,
+          propertyId: testPropertyId,
+          amount: 10,
+          paymentMethod: 'vodafone_cash'
+        })
+      ).rejects.toThrow('الحد الأدنى للدفع 50 جنيه');
+    });
+
+    it('should throw if receipt image is missing', async () => {
+      await expect(
+        supabaseService.createPaymentRequest({
+          userId: testUserId,
+          propertyId: testPropertyId,
+          amount: sufficientAmount,
+          paymentMethod: 'fawry'
+        })
+      ).rejects.toThrow('يجب رفع صورة الإيصال');
+    });
+
+    it('should throw if property does not exist', async () => {
+      await expect(
+        supabaseService.createPaymentRequest({
+          userId: testUserId,
+          propertyId: 'nonexistent',
+          amount: sufficientAmount,
+          paymentMethod: 'fawry',
+          receiptImage: 'fake.png'
+        })
+      ).rejects.toThrow('العقار غير موجود');
+    });
+
+    it('should throw on duplicate pending request', async () => {
+      // first request succeeds (mock mode bypass)
+      await supabaseService.createPaymentRequest({
+        userId: testUserId,
+        propertyId: testPropertyId,
+        amount: sufficientAmount,
+        paymentMethod: 'fawry',
+        receiptImage: 'one.png'
+      });
+      // second request should fail
+      await expect(
+        supabaseService.createPaymentRequest({
+          userId: testUserId,
+          propertyId: testPropertyId,
+          amount: sufficientAmount,
+          paymentMethod: 'fawry',
+          receiptImage: 'two.png'
+        })
+      ).rejects.toThrow('لديك طلب دفع قيد المراجعة بالفعل');
+    });
+  });
+
   beforeEach(async () => {
     // Clean up test data before each test
     try {

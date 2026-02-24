@@ -1,30 +1,34 @@
 'use client';
 
-import { useAuth } from '@/context/AuthContext';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useAuth } from '@/hooks/useAuth';
+import { useRouter, usePathname } from 'next/navigation';
 import { useEffect } from 'react';
 import AuthLoading from './AuthLoading';
 
-export default function ProtectedRoute({ children }: { children: React.ReactNode }) {
+function ProtectedRouteContent({ children }: { children: React.ReactNode }) {
     const { isAuthenticated, loading } = useAuth();
     const router = useRouter();
-    const searchParams = useSearchParams();
+    const pathname = usePathname();
 
     useEffect(() => {
         if (!loading && !isAuthenticated) {
-            // Encode the current path to redirect back after login
-            const currentPath = window.location.pathname + window.location.search;
-            router.push(`/login?redirect=${encodeURIComponent(currentPath)}`);
+            router.push(`/auth?mode=login&redirect=${encodeURIComponent(pathname)}`);
         }
-    }, [isAuthenticated, loading, router]);
+    }, [isAuthenticated, loading, router, pathname]);
 
     if (loading) {
         return <AuthLoading />;
     }
 
     if (!isAuthenticated) {
-        return null; // Don't render anything while redirecting
+        return null;
     }
 
     return <>{children}</>;
+}
+
+export default function ProtectedRoute({ children }: { children: React.ReactNode }) {
+    return (
+        <ProtectedRouteContent>{children}</ProtectedRouteContent>
+    );
 }

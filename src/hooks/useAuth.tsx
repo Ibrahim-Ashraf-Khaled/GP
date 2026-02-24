@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, createContext, useContext, ReactNode } from 'react';
 import { supabase } from '@/lib/supabase';
 import { User, UserRole } from '@/types';
 
@@ -10,144 +10,149 @@ const AUTH_MODE: AuthMode = process.env.NEXT_PUBLIC_IS_MOCK_MODE === 'true' ? 'm
 
 interface Profile {
     id: string;
-    user_id: string;
     full_name: string | null;
+    name?: string | null;
     phone: string | null;
     role: UserRole;
     avatar_url: string | null;
     created_at: string;
     updated_at: string;
+    isVerified?: boolean;
 }
 
 interface AuthContextType {
     user: User | null;
     profile: Profile | null;
     isLoading: boolean;
-    loading: boolean; // Alias for backward compatibility
+    loading: boolean;
     isAuthenticated: boolean;
     signIn: (email: string, password: string) => Promise<{ error: any }>;
-    login: (email: string, password: string) => Promise<{ error: any }>; // Alias
-    signUp: (email: string, password: string, fullName: string) => Promise<{ error: any }>;
-    register: (email: string, password: string, fullName: string) => Promise<{ error: any }>; // Alias
+    login: (email: string, password: string) => Promise<{ error: any }>;
+    signUp: (email: string, password: string, fullName: string, phone?: string, role?: 'tenant' | 'landlord') => Promise<{ error: any }>;
+    register: (email: string, password: string, fullName: string, phone?: string, role?: 'tenant' | 'landlord') => Promise<{ error: any }>;
     signOut: () => Promise<void>;
-    logout: () => Promise<void>; // Alias
+    logout: () => Promise<void>;
     resetPassword: (contact: string) => Promise<{ error: Error | null }>;
     signInWithGoogle: () => Promise<{ error: Error | null }>;
     signInWithFacebook: () => Promise<{ error: Error | null }>;
+    signInWithApple: () => Promise<{ error: Error | null }>;
     refreshProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
+export function AuthProvider({ children }: { children: React.ReactNode }): React.ReactNode {
     const [user, setUser] = useState<User | null>(null);
     const [profile, setProfile] = useState<Profile | null>(null);
     const [isLoading, setIsLoading] = useState(true);
+
+    const mapAuthUserToAppUser = (u: any): User => {
+        return {
+            id: u.id,
+            name: u.user_metadata?.full_name || u.email?.split("@")[0] || "User",
+            phone: "",
+            email: u.email || "",
+            avatar: u.user_metadata?.avatar_url || undefined,
+            role: "tenant",
+            isVerified: !!u.email_confirmed_at,
+            favorites: [],
+            unlockedProperties: [],
+            createdAt: new Date().toISOString(),
+            memberSince: new Date().toISOString(),
+            lastLogin: new Date().toISOString(),
+        } as User;
+    };
 
     const fetchProfile = useCallback(async (userId: string) => {
         try {
             const { data, error } = await supabase
                 .from('profiles')
-                .select('*')
-                .eq('user_id', userId)
-                .single();
+                .select('id, full_name, phone, role, avatar_url, created_at, updated_at')
+                .eq('id', userId)
+                .maybeSingle();
 
             if (error) {
-                console.error('Error fetching profile:', error);
+                console.warn('fetchProfile failed (non-fatal):', error);
                 return null;
             }
 
-            return data as Profile;
+            return data as Profile | null;
         } catch (error) {
-            console.error('Error fetching profile:', error);
+            console.warn('fetchProfile exception (non-fatal):', error);
             return null;
         }
     }, []);
 
-    const syncUserWithProfile = useCallback(async (supabaseUser: { id: string; email?: string; created_at?: string }) => {
-        if (!supabaseUser) {
+    const syncUserWithProfile = useCallback(async (authUser: any) => {
+        if (!authUser) {
             setUser(null);
             setProfile(null);
             return;
         }
 
-        const userProfile = await fetchProfile(supabaseUser.id);
+        const baseUser = mapAuthUserToAppUser(authUser);
+        setUser(baseUser);
 
-        if (userProfile) {
-            const mappedUser: User = {
-                id: userProfile.user_id,
-                name: userProfile.full_name || '',
-                phone: userProfile.phone || '',
-                email: supabaseUser.email,
-                avatar: userProfile.avatar_url || undefined,
-                role: userProfile.role,
-                isVerified: false,
-                favorites: [],
-                unlockedProperties: [],
-                createdAt: userProfile.created_at,
-                memberSince: userProfile.created_at,
-            };
-            setUser(mappedUser);
-            setProfile(userProfile);
-        } else {
-            setUser({
-                id: supabaseUser.id,
-                name: supabaseUser.email?.split('@')[0] || '',
-                phone: '',
-                email: supabaseUser.email,
-                role: 'tenant',
-                isVerified: false,
-                favorites: [],
-                unlockedProperties: [],
-                createdAt: supabaseUser.created_at || new Date().toISOString(),
-                memberSince: supabaseUser.created_at || new Date().toISOString(),
-            });
-            setProfile(null);
+        const profileData = await fetchProfile(authUser.id);
+        if (!profileData) {
+            return;
         }
+
+        setUser((prev) => ({
+            ...prev!,
+            id: profileData.id,
+            name: profileData.full_name || prev!.name,
+            phone: profileData.phone || "",
+            avatar: profileData.avatar_url || prev!.avatar,
+            role: profileData.role || prev!.role,
+        }));
+        setProfile(profileData);
     }, [fetchProfile]);
 
     useEffect(() => {
-        let isMounted = true;
+        let alive = true;
 
-        const initAuth = async () => {
+        const boot = async () => {
             try {
-                const { data: { session } } = await supabase.auth.getSession();
-                
-                if (isMounted && session?.user) {
-                    await syncUserWithProfile(session.user);
-                }
-            } catch (error) {
-                console.error('Error initializing auth:', error);
-            } finally {
-                if (isMounted) {
+                const { data: { session }, error } = await supabase.auth.getSession();
+                if (!alive) return;
+
+                if (error) console.warn('getSession error:', error);
+
+                const user = session?.user;
+                if (!user) {
+                    setUser(null);
                     setIsLoading(false);
+                    return;
                 }
+
+                await syncUserWithProfile(user);
+            } catch (err) {
+                console.warn('boot exception:', err);
+            } finally {
+                if (alive) setIsLoading(false);
             }
         };
 
-        initAuth();
+        boot();
 
-        const { data: { subscription } } = supabase.auth.onAuthStateChange(
-            async (event, session) => {
-                if (!isMounted) return;
+        const { data: sub } = supabase.auth.onAuthStateChange(async (_event, session) => {
+            if (!alive) return;
 
-                if (event === 'SIGNED_OUT') {
-                    setUser(null);
-                    setProfile(null);
-                    setIsLoading(false);
-                } else if (session?.user) {
-                    await syncUserWithProfile(session.user);
-                }
+            if (!session?.user) {
+                setUser(null);
+                return;
             }
-        );
+
+            await syncUserWithProfile(session.user);
+        });
 
         return () => {
-            isMounted = false;
-            subscription.unsubscribe();
+            alive = false;
+            sub.subscription.unsubscribe();
         };
     }, [syncUserWithProfile]);
 
-    // simple persistence helper used by the basic auth flow
     const saveUser = (u: User) => {
         try {
             localStorage.setItem('gamasa_current_user', JSON.stringify(u));
@@ -157,14 +162,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
 
     const signIn = async (email: string, password: string) => {
-        // production flow only; mock mode handled earlier if needed
         if (AUTH_MODE === 'mock') {
             return mockSignIn(email, password);
         }
 
         const { data, error } = await supabase.auth.signInWithPassword({ email, password });
         if (!error && data.user) {
-            // أقل mapping سريع (لحد ما نربط profiles بالكامل)
             const mappedUser = {
                 id: data.user.id,
                 name:
@@ -187,24 +190,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return { error };
     };
 
-    const signUp = async (email: string, password: string, fullName: string) => {
+    const signUp = async (
+        email: string,
+        password: string,
+        fullName: string,
+        phone?: string,
+        role: 'tenant' | 'landlord' = 'tenant'
+    ) => {
         if (AUTH_MODE === 'mock') {
-            return mockSignUp(email, password, fullName, '', 'tenant' as UserRole);
+            return mockSignUp(email, password, fullName, phone || '', role as UserRole);
         }
 
         const { data, error } = await supabase.auth.signUp({
             email,
             password,
-            options: { data: { full_name: fullName } },
+            options: { data: { full_name: fullName, phone, role } },
         });
 
-        // (اختياري) إنشاء profile row بعد التسجيل لو عندك RLS policy تسمح
+        console.log('signUp:', { user: data.user?.id, session: !!data.session, error });
+
+        if (!error && data.user && !data.session) {
+            const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+            if (signInError) {
+                console.error('signIn after signUp failed:', signInError);
+                return { error: signInError };
+            }
+        }
+
         if (!error && data.user) {
-            await supabase.from('profiles').upsert({
+            const { error: profileError } = await supabase.from('profiles').upsert({
                 id: data.user.id,
                 full_name: fullName,
-                email,
+                phone: phone || null,
+                role: role,
             });
+            if (profileError) console.error('profiles upsert error:', profileError);
         }
 
         return { error };
@@ -283,6 +303,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
     };
 
+    const signInWithApple = async (): Promise<{ error: Error | null }> => {
+        if (AUTH_MODE === 'mock') {
+            return mockSocialLogin('apple');
+        }
+
+        try {
+            const { error } = await supabase.auth.signInWithOAuth({
+                provider: 'apple',
+                options: {
+                    redirectTo: `${window.location.origin}/auth/callback`,
+                },
+            });
+            return { error: error as Error | null };
+        } catch (error) {
+            return { error: error as Error };
+        }
+    };
+
     const refreshProfile = async () => {
         if (user?.id) {
             await syncUserWithProfile({ id: user.id, email: user.email });
@@ -293,15 +331,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         <AuthContext.Provider
             value={{
                 user,
-                profile: user,
+                profile,
+                isLoading,
                 loading: isLoading,
-                login: signIn,
-                register: signUp,
-                logout: signOut,
-                signOut: signOut,
                 isAuthenticated: !!user,
                 signIn,
+                login: signIn,
                 signUp,
+                register: signUp,
+                signOut,
+                logout: signOut,
+                resetPassword,
+                signInWithGoogle,
+                signInWithFacebook,
+                signInWithApple,
+                refreshProfile,
             }}
         >
             {children}
@@ -364,7 +408,7 @@ async function mockSignUp(
     return { error: null };
 }
 
-async function mockSocialLogin(provider: 'google' | 'facebook'): Promise<{ error: Error | null }> {
+async function mockSocialLogin(provider: 'google' | 'facebook' | 'apple'): Promise<{ error: Error | null }> {
     const mockUser = {
         id: 'mock_' + provider + '_' + Date.now(),
         name: 'Mock User',

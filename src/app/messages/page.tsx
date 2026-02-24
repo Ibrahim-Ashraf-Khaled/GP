@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useAuth } from '@/context/AuthContext';
+import { useAuth } from '@/hooks/useAuth';
 import { supabaseService } from '@/services/supabaseService';
 import { supabase } from '@/lib/supabase';
 import Header from '@/components/Header';

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
-import { useAuth } from '@/context/AuthContext';
+import { useAuth } from '@/hooks/useAuth';
 import { supabaseService } from '@/services/supabaseService';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';

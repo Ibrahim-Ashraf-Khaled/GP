@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuth } from '@/context/AuthContext';
+import { useAuth } from '@/hooks/useAuth';
 import { supabaseService } from '@/services/supabaseService';
 import { PropertyRow } from '@/services/supabaseService';
 import { RentalConfig, RentalType } from '@/types';

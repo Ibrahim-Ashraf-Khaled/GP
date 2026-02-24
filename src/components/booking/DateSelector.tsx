@@ -17,6 +17,7 @@ export default function DateSelector({
     rentalConfig,
     startDate,
     endDate,
+    minDate,
     onStartDateChange,
     onEndDateChange,
     onMonthsChange

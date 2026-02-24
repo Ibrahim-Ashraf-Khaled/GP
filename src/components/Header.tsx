@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { useAuth } from '@/context/AuthContext';
-import { getNotifications, markNotificationAsRead, markAllNotificationsAsRead, getUnreadNotificationCount } from '@/lib/storage';
+import { useAuth } from '@/hooks/useAuth';
+import { supabaseService } from '@/services/supabaseService';
 import type { Notification } from '@/types';
 
 export default function Header() {
@@ -15,9 +15,10 @@ export default function Header() {
 
     useEffect(() => {
         if (user) {
-            const userNotifications = getNotifications(user.id);
-            setNotifications(userNotifications);
-            setUnreadCount(getUnreadNotificationCount(user.id));
+            supabaseService.getNotifications(user.id).then((notifs) => {
+                setNotifications(notifs as unknown as Notification[]);
+                setUnreadCount(notifs.filter(n => !n.is_read).length);
+            });
         }
     }, [user]);
 
@@ -37,11 +38,12 @@ export default function Header() {
         };
     }, [showNotifications]);
 
-    const handleNotificationClick = (notification: Notification) => {
-        markNotificationAsRead(notification.id);
+    const handleNotificationClick = async (notification: Notification) => {
+        await supabaseService.markNotificationAsRead(notification.id);
         if (user) {
-            setNotifications(getNotifications(user.id));
-            setUnreadCount(getUnreadNotificationCount(user.id));
+            const notifs = await supabaseService.getNotifications(user.id);
+            setNotifications(notifs as unknown as Notification[]);
+            setUnreadCount(notifs.filter(n => !n.is_read).length);
         }
         setShowNotifications(false);
 
@@ -50,10 +52,11 @@ export default function Header() {
         }
     };
 
-    const handleMarkAllAsRead = () => {
+    const handleMarkAllAsRead = async () => {
         if (user) {
-            markAllNotificationsAsRead(user.id);
-            setNotifications(getNotifications(user.id));
+            await supabaseService.markAllNotificationsAsRead(user.id);
+            const notifs = await supabaseService.getNotifications(user.id);
+            setNotifications(notifs as unknown as Notification[]);
             setUnreadCount(0);
         }
     };

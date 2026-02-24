@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { useAuth } from '@/context/AuthContext';
+import { useAuth } from '@/hooks/useAuth';
 import { supabaseService } from '@/services/supabaseService';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -93,14 +93,14 @@ export default function ProfilePage() {
                         <div className="relative shrink-0">
                             <div className="w-20 h-20 rounded-full bg-gradient-to-tr from-blue-500 to-purple-500 p-[3px]">
                                 <div className="w-full h-full rounded-full bg-white dark:bg-zinc-900 flex items-center justify-center overflow-hidden">
-                                    {profile?.avatar ? (
-                                        <img src={profile.avatar} alt="" className="w-full h-full object-cover" />
+                                    {profile?.avatar_url ? (
+                                        <img src={profile.avatar_url} alt="" className="w-full h-full object-cover" />
                                     ) : (
                                         <span className="material-symbols-outlined text-gray-400 text-4xl">person</span>
                                     )}
                                 </div>
                             </div>
-                            {profile?.isVerified && (
+                            {(user?.isVerified || (profile as { isVerified?: boolean })?.isVerified) && (
                                 <div className="absolute -bottom-1 -right-1 bg-blue-500 text-white rounded-full p-1 border-4 border-white dark:border-zinc-900 flex items-center justify-center" title="موثق">
                                     <span className="material-symbols-outlined text-[14px]">verified</span>
                                 </div>

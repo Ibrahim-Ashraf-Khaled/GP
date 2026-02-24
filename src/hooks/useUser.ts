@@ -1,11 +1,11 @@
 'use client';
 
 /**
- * @deprecated استخدم useAuth() من '@/context/AuthContext' مباشرة.
- * هذا الهوك مجرد Wrapper للتوافق الخلفي، ولا يحتوي أي منطق جلسة (SSOT).
+ * @deprecated Use useAuth() from '@/hooks/useAuth' instead.
+ * This hook is kept for backward compatibility.
  */
 
-import { useAuth } from '@/context/AuthContext';
+import { useAuth } from '@/hooks/useAuth';
 
 export function useUser() {
   const { user, profile, isAuthenticated, isLoading, loading, refreshProfile } = useAuth();

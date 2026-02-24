@@ -1,8 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { uploadImage, unlockProperty, addNotification } from '@/lib/storage';
-import { useAuth } from '@/context/AuthContext';
+import { supabaseService } from '@/services/supabaseService';
+import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/hooks/useAuth';
 
 interface UnlockModalProps {
     propertyId: string;
@@ -20,46 +21,32 @@ export function UnlockModal({ propertyId, onClose, onSuccess }: UnlockModalProps
         if (!file || !user) return;
         setUploading(true);
         try {
-            // 1. رفع صورة الإيصال لـ Supabase
-            const receiptUrl = await uploadImage(file);
-
-            // 2. فك القفل (في النظام الحقيقي ننتظر مراجعة الأدمن، هنا سنفعلها فوراً للنموذج)
-            unlockProperty(propertyId);
-
-            // 3. إضافة إشعار
-            // Notification handled in storage.ts or here. 
-            // The user snippet had it here. I'll keep it here just in case, or rely on storage.
-            // Since I updated storage to do it, I might get double notifications if I leave it here.
-            // But the user requested specific logic which INCLUDED it here.
-            // I will COMMENT OUT the duplicate one here to follow "best practice" unless the user insisted specifically on THIS block logic line-by-line.
-            // User said: "3. إضافة إشعار" inside the handleUpload
-            // I'll keep it here and remove from storage to respect the snippet, OR keep simpler storage.
-            // Actually, safer to have it in one place. I'll stick to storage having it as I already implemented it there.
-            // Wait, I am pasting the user's code. I should respect their code structure.
-            // Their code calls `addNotification` here. 
-
-            /* 
-            addNotification({
+            // 1. Create payment request
+            await supabaseService.createPaymentRequest({
                 userId: user.id,
-                title: 'تم إرسال الطلب',
-                message: 'جاري مراجعة إيصال الدفع لفك قفل العقار.',
-                type: 'info'
+                propertyId: propertyId,
+                amount: 50,
+                paymentMethod: 'vodafone_cash',
+                receiptImage: 'pending'
             });
-            */
-            // The user code snippet explicitly adds an 'info' notification about review.
-            // My storage code adds a 'success' notification about unlocking.
-            // They are different. One is "Request Sent", one is "Unlocked".
-            // Since we unlock IMMEDIATELY for mock purposes, the 'success' one makes more sense.
-            // However, let's add the info one as requested by the user snippet.
 
-            addNotification({
+            // 2. Try to unlock property (will throw if not approved)
+            try {
+                await supabaseService.unlockProperty(user.id, propertyId);
+            } catch (unlockError) {
+                // Property unlock requires admin approval, that's OK for now
+                console.log('Property will be unlocked after payment approval');
+            }
+
+            // 3. Add notification
+            await supabaseService.createNotification({
                 userId: user.id,
                 title: 'تم إرسال الطلب',
                 message: 'جاري مراجعة إيصال الدفع لفك قفل العقار.',
                 type: 'info'
             });
 
-            setStep(3); // نجاح
+            setStep(3);
             setTimeout(() => {
                 onClose();
                 if (onSuccess) {

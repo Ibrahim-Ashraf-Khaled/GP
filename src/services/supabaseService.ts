@@ -11,7 +11,7 @@ export interface UserProfile {
     full_name: string | null;
     avatar_url: string | null;
     phone: string | null;
-    role: 'مؤجر' | 'مستأجر' | 'admin';
+    role: 'landlord' | 'tenant' | 'admin';
     is_verified: boolean;
     is_admin: boolean;
 }
@@ -211,7 +211,7 @@ export const supabaseService = {
                 full_name: 'مستخدم تجريبي',
                 avatar_url: null,
                 phone: '01000000000',
-                role: 'مؤجر',
+                role: 'landlord',
                 is_admin: true,
                 is_verified: true
             };
@@ -233,20 +233,43 @@ export const supabaseService = {
     // ====== رفع الصور ======
     async uploadPropertyImages(files: File[], userId: string): Promise<string[]> {
         if (IS_MOCK_MODE) {
-            // Return fake cloud URLs
             return files.map(() => `https://images.unsplash.com/photo-${Math.floor(Math.random() * 1000)}?auto=format&fit=crop&w=800&q=80`);
         }
 
+        const { validateMultipleImages } = await import('@/lib/utils/fileValidation');
+        
+        const validationErrors = await validateMultipleImages(files);
+        if (validationErrors.length > 0) {
+            const errorMessage = validationErrors
+                .map(e => `${e.file}: ${e.error}`)
+                .join('\n');
+            throw new Error(`أخطاء في رفع الملفات:\n${errorMessage}`);
+        }
+
         const uploadedUrls: string[] = [];
+        const failedUploads: string[] = [];
+
         for (const file of files) {
             try {
                 const url = await uploadImage(file, `${userId}/`);
                 uploadedUrls.push(url);
             } catch (error) {
-                console.error('Error uploading image:', error);
-                throw error;
+                console.error('Error uploading image:', file.name, error);
+                failedUploads.push(file.name);
+                
+                for (const url of uploadedUrls) {
+                    try {
+                        const path = new URL(url).pathname.split('/storage/v1/object/public/')[1];
+                        await supabase.storage.from('property-images').remove([path]);
+                    } catch (deleteError) {
+                        console.error('Failed to delete uploaded file:', url);
+                    }
+                }
+                
+                throw new Error(`فشل رفع الملف: ${file.name}`);
             }
         }
+
         return uploadedUrls;
     },
 
@@ -613,6 +636,39 @@ export const supabaseService = {
         paymentMethod: 'vodafone_cash' | 'instapay' | 'fawry';
         receiptImage?: string;
 }): Promise<void> {
+        // ===== validation (Task #1.3) =====
+        if (params.amount < 50) {
+            throw new Error('الحد الأدنى للدفع 50 جنيه');
+        }
+
+        if (!params.receiptImage) {
+            throw new Error('يجب رفع صورة الإيصال');
+        }
+
+        // verify property exists
+        const { data: property, error: propError } = await supabase
+            .from('properties')
+            .select('id')
+            .eq('id', params.propertyId)
+            .single();
+
+        if (propError || !property) {
+            throw new Error('العقار غير موجود');
+        }
+
+        // prevent duplicate pending requests
+        const { data: existing } = await supabase
+            .from('payment_requests')
+            .select('id')
+            .eq('user_id', params.userId)
+            .eq('property_id', params.propertyId)
+            .eq('status', 'pending')
+            .maybeSingle();
+
+        if (existing) {
+            throw new Error('لديك طلب دفع قيد المراجعة بالفعل');
+        }
+
         if (IS_MOCK_MODE) {
             // Store mock payment for testing
             _mockPayments.push({
@@ -783,7 +839,7 @@ export const supabaseService = {
                     id: 'mock-user-123',
                     full_name: 'مستخدم تجريبي',
                     email: 'test@example.com',
-                    role: 'مؤجر',
+                    role: 'landlord',
                     is_verified: true,
                     created_at: new Date().toISOString()
                 }
@@ -1168,40 +1224,39 @@ export const supabaseService = {
 
         switch (type) {
             case 'daily':
-                // حساب عدد الليالي
-                duration = Math.ceil(
+                const nights = Math.ceil(
                     (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)
                 );
+                duration = Math.max(1, nights);
                 basePrice = duration * pricePerUnit;
                 break;
 
             case 'monthly':
-                // حساب عدد الأشهر (تقريبي: 30 يوم = شهر)
-                const days = Math.ceil(
-                    (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)
-                );
-                duration = Math.ceil(days / 30);
+                const monthsDiff = 
+                    (endDate.getFullYear() - startDate.getFullYear()) * 12 + 
+                    (endDate.getMonth() - startDate.getMonth());
+                
+                const hasExtraDays = endDate.getDate() > startDate.getDate();
+                duration = Math.max(1, monthsDiff + (hasExtraDays ? 1 : 0));
                 basePrice = duration * pricePerUnit;
                 break;
 
             case 'seasonal':
-                // الفترة الدراسية ثابتة: 10 أشهر
                 duration = 10;
                 basePrice = duration * pricePerUnit;
 
-                // التأمين إذا كان مطلوباً
                 if (seasonalConfig?.requiresDeposit) {
                     depositAmount = seasonalConfig.depositAmount || pricePerUnit;
                 }
                 break;
         }
 
-        const SERVICE_FEE_PERCENTAGE = 0.1; // 10%
-        const serviceFee = basePrice * SERVICE_FEE_PERCENTAGE;
-        const totalAmount = basePrice + serviceFee + depositAmount;
+        const SERVICE_FEE_PERCENTAGE = 0.1;
+        const serviceFee = Math.round(basePrice * SERVICE_FEE_PERCENTAGE * 100) / 100;
+        const totalAmount = Math.round((basePrice + serviceFee + depositAmount) * 100) / 100;
 
         return {
-            basePrice,
+            basePrice: Math.round(basePrice * 100) / 100,
             serviceFee,
             depositAmount,
             totalAmount,
@@ -1238,8 +1293,8 @@ export const supabaseService = {
             .select('id')
             .eq('property_id', propertyId)
             .in('status', ['confirmed', 'pending'])
-            .gte('end_date', startDate)
-            .lte('start_date', endDate);
+            .filter('start_date', 'lte', endDate)
+            .filter('end_date', 'gte', startDate);
 
         return {
             available: !data || data.length === 0,
@@ -1276,7 +1331,7 @@ if (IS_MOCK_MODE) {
         }
 
         // Use atomic booking function to prevent double bookings
-        const { data, error } = await supabase.rpc('create_atomic_booking', {
+        const { data, error } = await supabase.rpc('create_booking_atomically', {
             p_property_id: bookingData.propertyId,
             p_user_id: bookingData.userId,
             p_start_date: bookingData.startDate,

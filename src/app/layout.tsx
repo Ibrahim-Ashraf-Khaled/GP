@@ -3,7 +3,9 @@ import { Noto_Sans_Arabic, Inter } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
 import IOSInstallPrompt from "@/components/IOSInstallPrompt";
-import { AuthProvider } from '@/context/AuthContext';
+import { AuthProvider } from '@/hooks/useAuth';
+import { SerwistProvider } from "./serwist";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 const notoSansArabic = Noto_Sans_Arabic({
   subsets: ["arabic"],
@@ -24,7 +26,6 @@ export const metadata: Metadata = {
   description: "منصة تأجير العقارات الأولى في جمصة - شقق، غرف، فيلات للإيجار بأسعار مناسبة. احجز مصيفك الآن!",
   keywords: ["إيجار شقق جمصة", "مصيف جمصة", "شقق رخيصة بجمصة", "عقارات جمصة", "إيجار غرف جمصة"],
   authors: [{ name: "عقارات جمصة" }],
-  manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
@@ -81,10 +82,18 @@ export default function RootLayout({
       </head>
       <body className={`${notoSansArabic.variable} ${inter.variable} font-sans antialiased`}>
         <AuthProvider>
-          <Providers>
-            {children}
-            <IOSInstallPrompt />
-          </Providers>
+          <SerwistProvider
+            swUrl="/serwist/sw.js"
+            register={true}
+            disable={process.env.NODE_ENV === "development"}
+            cacheOnNavigation={true}
+            reloadOnOnline={true}
+          >
+            <Providers>
+              {children}
+              <IOSInstallPrompt />
+            </Providers>
+          </SerwistProvider>
         </AuthProvider>
       </body>
     </html>

@@ -5,7 +5,7 @@ import { supabaseService } from '@/services/supabaseService';
 import { PropertyCard } from '@/components/PropertyCard';
 import Header from '@/components/Header';
 import { BottomNav } from '@/components/BottomNav';
-import { useAuth } from '@/context/AuthContext';
+import { useAuth } from '@/hooks/useAuth';
 import { Property } from '@/types';
 import Link from 'next/link';
 import { GlassCard } from '@/components/ui/glass';

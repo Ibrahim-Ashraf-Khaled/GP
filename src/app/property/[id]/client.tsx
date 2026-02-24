@@ -6,7 +6,7 @@ import Header from '@/components/Header';
 import { UnlockModal } from '@/components/UnlockModal';
 import { ImageSkeleton } from '@/components/ImageSkeleton';
 import { useRouter } from 'next/navigation';
-import { useAuth } from '@/context/AuthContext';
+import { useAuth } from '@/hooks/useAuth';
 import { supabaseService } from '@/services/supabaseService';
 import WhatsAppButton from '@/components/WhatsAppButton';
 

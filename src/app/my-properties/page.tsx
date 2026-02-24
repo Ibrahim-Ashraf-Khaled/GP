@@ -6,8 +6,8 @@ import Header from '@/components/Header';
 import { BottomNav } from '@/components/BottomNav';
 import MyPropertyCard from '@/components/MyPropertyCard';
 import { Property } from '@/types';
-import { getProperties, addProperty, getUserPropertiesFromSupabase } from '@/lib/storage'; // Removed getCurrentUser as we use useAuth
-import { useAuth } from '@/context/AuthContext';
+import { supabaseService } from '@/services/supabaseService';
+import { useAuth } from '@/hooks/useAuth';
 import ProtectedRoute from '@/components/ProtectedRoute';
 
 export default function MyPropertiesPage() {
@@ -30,40 +30,22 @@ export default function MyPropertiesPage() {
         }
 
         try {
-            // التحقق من المتغير للتبديل بين Mock و Real Data
-            const isMockMode = process.env.NEXT_PUBLIC_IS_MOCK_MODE === 'true';
-
-            if (isMockMode) {
-                // استخدام Mock Data من localStorage
-                const allProperties = getProperties();
-                const userProperties = allProperties.filter(p => p.ownerId === user.id);
-                setProperties(userProperties);
-            } else {
-                // استخدام Supabase
-                const userProperties = await getUserPropertiesFromSupabase(user.id);
-                setProperties(userProperties);
-            }
+            const userProperties = await supabaseService.getProperties({ ownerId: user.id });
+            setProperties(userProperties as unknown as Property[]);
         } catch (error) {
             console.error('Error loading properties:', error);
-            // Fallback to mock data in case of error
-            const allProperties = getProperties();
-            const userProperties = allProperties.filter(p => p.ownerId === user.id);
-            setProperties(userProperties);
         } finally {
             setLoading(false);
         }
     };
 
-    const handleDelete = (id: string) => {
-        // Here we would typically call a delete function from storage
-        // For now, let's just update the local state to reflect removal
-        // Note: Real deletion logic needs to be added to storage.ts if not present
-        const currentProps = getProperties();
-        const updatedProps = currentProps.filter(p => p.id !== id);
-        localStorage.setItem('gamasa_properties', JSON.stringify(updatedProps));
-
-        // Refresh local state
-        setProperties(prev => prev.filter(p => p.id !== id));
+    const handleDelete = async (id: string) => {
+        try {
+            await supabaseService.deleteProperty(id);
+            setProperties(prev => prev.filter(p => p.id !== id));
+        } catch (error) {
+            console.error('Error deleting property:', error);
+        }
     };
 
     if (!user) {
