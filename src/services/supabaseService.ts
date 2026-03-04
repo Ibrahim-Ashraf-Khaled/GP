@@ -4,9 +4,9 @@ import { Conversation, Message, Profile } from '@/types/messaging';
 
 // === Mock Mode Flag ===
 export const IS_MOCK_MODE =
-  typeof window !== 'undefined'
-    ? window.localStorage.getItem('DEV_MOCK_MODE') === 'true'
-    : process.env.NEXT_PUBLIC_IS_MOCK_MODE === 'true';
+    typeof window !== 'undefined'
+        ? window.localStorage.getItem('DEV_MOCK_MODE') === 'true'
+        : process.env.NEXT_PUBLIC_IS_MOCK_MODE === 'true';
 
 // أنواع البيانات
 export interface UserProfile {
@@ -1199,11 +1199,11 @@ export const supabaseService = {
 
         // Defensive validation
         const { validateDateString, validateUUID } = await import('@/utils/validation');
-        
+
         if (!validateUUID(propertyId)) {
             return { available: false, error: { message: 'معرف العقار غير صالح' } };
         }
-        
+
         if (!validateDateString(startDate) || !validateDateString(endDate)) {
             return { available: false, error: { message: 'تاريخ غير صالح' } };
         }
@@ -1298,7 +1298,7 @@ export const supabaseService = {
     /**
      * جلب حجوزات المستخدم
      */
-    async getUserBookings(userId: string): Promise<{
+    async getUserBookingsLegacy(userId: string): Promise<{
         data: import('@/types').Booking[];
         error: any;
     }> {
@@ -1346,6 +1346,52 @@ export const supabaseService = {
         }));
 
         return { data: bookings, error: null };
+    },
+
+    /**
+     * جلب الحجوزات الواردة والصادرة (للمستأجر والمالك معاً)
+     */
+    async getUserBookings(userId: string): Promise<{ myBookings: any[], incomingRequests: any[], error: any }> {
+        if (IS_MOCK_MODE) {
+            // will just return empty, page.tsx will fallback to initial constants
+            return { myBookings: [], incomingRequests: [], error: null };
+        }
+
+        try {
+            // 1. My Bookings (as tenant)
+            const { data: myBookingsData, error: myError } = await supabase
+                .from('bookings')
+                .select(`
+                    id, property_id, start_date, end_date, total_amount, status, created_at,
+                    property:properties ( title, images, area, owner_name, owner_phone )
+                `)
+                .eq('user_id', userId)
+                .order('created_at', { ascending: false });
+
+            if (myError) throw myError;
+
+            // 2. Incoming Requests (as landlord)
+            const { data: incomingRequestsData, error: incomingError } = await supabase
+                .from('bookings')
+                .select(`
+                    id, property_id, start_date, end_date, total_amount, status, created_at, tenant_name,
+                    property:properties!inner ( title, images, area, owner_id ),
+                    user:profiles ( full_name, avatar_url )
+                `)
+                .eq('property.owner_id', userId)
+                .order('created_at', { ascending: false });
+
+            if (incomingError) throw incomingError;
+
+            return {
+                myBookings: myBookingsData || [],
+                incomingRequests: incomingRequestsData || [],
+                error: null
+            };
+        } catch (error: any) {
+            console.error('Error in getUserBookings:', error);
+            return { myBookings: [], incomingRequests: [], error };
+        }
     },
 
     /**
@@ -1443,8 +1489,8 @@ export const supabaseService = {
      */
     async updateBookingStatus(
         bookingId: string,
-        status: 'pending' | 'confirmed' | 'cancelled',
-        paymentStatus?: 'pending' | 'confirmed' | 'failed'
+        status: string,
+        paymentStatus?: string
     ): Promise<{ error: any }> {
         if (IS_MOCK_MODE) {
             return { error: null };
@@ -1454,7 +1500,7 @@ export const supabaseService = {
         if (paymentStatus) {
             updates.payment_status = paymentStatus;
         }
-        if (status === 'confirmed') {
+        if (status === 'confirmed' || status === 'approved') {
             updates.confirmed_at = new Date().toISOString();
         }
 

@@ -280,7 +280,7 @@ export default function ConfirmationPage() {
 
                 {/* أزرار الإجراءات */}
                 <div className="action-buttons">
-                    <button onClick={() => router.push('/profile/bookings')} className="btn-primary">
+                    <button onClick={() => router.push('/bookings')} className="btn-primary">
                         عرض حجوزاتي
                     </button>
                     <button onClick={() => router.push('/')} className="btn-secondary">
