@@ -242,6 +242,7 @@ export interface Database {
                     payment_method: 'vodafone_cash' | 'instapay' | 'fawry';
                     receipt_image: string | null;
                     status: 'pending' | 'approved' | 'rejected';
+                    is_consumed: boolean;
                     admin_note: string | null;
                     processed_at: string | null;
                     created_at: string;
@@ -254,6 +255,7 @@ export interface Database {
                     payment_method: 'vodafone_cash' | 'instapay' | 'fawry';
                     receipt_image?: string | null;
                     status?: 'pending' | 'approved' | 'rejected';
+                    is_consumed?: boolean;
                     admin_note?: string | null;
                     processed_at?: string | null;
                     created_at?: string;
@@ -266,6 +268,7 @@ export interface Database {
                     payment_method?: 'vodafone_cash' | 'instapay' | 'fawry';
                     receipt_image?: string | null;
                     status?: 'pending' | 'approved' | 'rejected';
+                    is_consumed?: boolean;
                     admin_note?: string | null;
                     processed_at?: string | null;
                     created_at?: string;
@@ -363,7 +366,6 @@ export interface Database {
                     unlocked_at?: string;
                 };
             };
-        };
             conversations: {
                 Row: {
                     id: string;
@@ -431,6 +433,15 @@ export interface Database {
         };
         Views: Record<string, never>;
         Functions: {
+            get_public_property_booking_periods: {
+                Args: {
+                    p_property_id: string;
+                };
+                Returns: {
+                    end_date: string;
+                    start_date: string;
+                }[];
+            };
             increment_views: {
                 Args: {
                     property_id: string;

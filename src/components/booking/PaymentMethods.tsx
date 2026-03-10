@@ -1,149 +1,105 @@
-'use client';
+﻿'use client';
 
-import React, { useState } from 'react';
+import React from 'react';
+import Image from 'next/image';
 
 type PaymentMethod = 'vodafone_cash' | 'instapay' | 'cash_on_delivery';
 
 interface PaymentMethodsProps {
     selectedMethod: PaymentMethod | null;
     onMethodChange: (method: PaymentMethod) => void;
+    error?: string;
 }
 
-export default function PaymentMethods({ selectedMethod, onMethodChange }: PaymentMethodsProps) {
-    const paymentOptions: { value: PaymentMethod; label: string; icon: string; description: string }[] = [
+export default function PaymentMethods({ selectedMethod, onMethodChange, error }: PaymentMethodsProps) {
+    const paymentOptions: {
+        value: PaymentMethod;
+        label: string;
+        description: string;
+        instruction: string;
+        iconSrc: string;
+    }[] = [
         {
             value: 'vodafone_cash',
             label: 'محفظة فودافون كاش',
-            icon: '📱',
-            description: 'الدفع عبر محفظة فودافون كاش'
+            description: 'الدفع عبر محفظة فودافون كاش',
+            instruction: 'بعد تأكيد الطلب سترفع صورة الإيصال',
+            iconSrc: '/payments/vodafone.svg',
         },
         {
             value: 'instapay',
             label: 'إنستاباي (InstaPay)',
-            icon: '💳',
-            description: 'التحويل الفوري عبر إنستاباي'
+            description: 'تحويل فوري عبر إنستاباي',
+            instruction: 'بعد تأكيد الطلب سترفع صورة الإيصال',
+            iconSrc: '/payments/instapay.svg',
         },
         {
             value: 'cash_on_delivery',
             label: 'الدفع عند الاستلام',
-            icon: '💵',
-            description: 'ادفع نقداً عند استلام العقار'
-        }
+            description: 'الدفع عند استلام العقار',
+            instruction: 'سيتم الدفع عند الاستلام',
+            iconSrc: '/payments/cash.png',
+        },
     ];
 
     return (
-        <div className="payment-methods">
-            <h3 className="text-lg font-semibold mb-4">طريقة الدفع</h3>
+        <fieldset className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900" aria-describedby={error ? 'payment-method-error' : undefined}>
+            <legend className="mb-4 text-base font-bold text-gray-900 dark:text-zinc-100">طريقة الدفع</legend>
 
             <div className="space-y-3">
-                {paymentOptions.map((option) => (
-                    <button
-                        key={option.value}
-                        type="button"
-                        onClick={() => onMethodChange(option.value)}
-                        className={`payment-option ${selectedMethod === option.value ? 'selected' : ''}`}
-                    >
-                        <div className="flex items-center gap-4">
-                            <div className="icon-container">
-                                <span className="text-2xl">{option.icon}</span>
-                            </div>
-                            <div className="flex-1 text-right">
-                                <div className="font-semibold text-gray-900">{option.label}</div>
-                                <div className="text-sm text-gray-500 mt-1">{option.description}</div>
-                            </div>
-                            <div className="radio-indicator">
-                                {selectedMethod === option.value && (
-                                    <div className="radio-inner"></div>
-                                )}
-                            </div>
+                {paymentOptions.map((option) => {
+                    const id = `payment-method-${option.value}`;
+                    const isSelected = selectedMethod === option.value;
+
+                    return (
+                        <div key={option.value}>
+                            <input
+                                id={id}
+                                type="radio"
+                                name="payment_method"
+                                value={option.value}
+                                checked={isSelected}
+                                onChange={() => onMethodChange(option.value)}
+                                className="peer sr-only"
+                            />
+
+                            <label
+                                htmlFor={id}
+                                className="block cursor-pointer rounded-2xl border border-gray-300 bg-white p-4 transition hover:border-gray-400 peer-checked:border-blue-600 peer-checked:bg-blue-50 dark:border-zinc-700 dark:bg-zinc-950 dark:hover:border-zinc-500 dark:peer-checked:border-blue-500 dark:peer-checked:bg-blue-950/30"
+                            >
+                                <div className="flex items-center gap-3">
+                                    <div className="relative h-10 w-10 overflow-hidden rounded-lg border border-gray-200 bg-white dark:border-zinc-700 dark:bg-zinc-900">
+                                        <Image
+                                            src={option.iconSrc}
+                                            alt={option.label}
+                                            fill
+                                            className="object-contain p-1"
+                                            unoptimized
+                                        />
+                                    </div>
+
+                                    <div className="min-w-0 flex-1">
+                                        <p className="font-semibold text-gray-900 dark:text-zinc-100">{option.label}</p>
+                                        <p className="text-xs text-gray-600 dark:text-zinc-400">{option.description}</p>
+                                    </div>
+
+                                    <div className={`h-5 w-5 rounded-full border-2 ${isSelected ? 'border-blue-600' : 'border-gray-300 dark:border-zinc-600'} flex items-center justify-center`}>
+                                        {isSelected ? <span className="h-2.5 w-2.5 rounded-full bg-blue-600" /> : null}
+                                    </div>
+                                </div>
+                            </label>
+
+                            {isSelected ? (
+                                <div className="mt-2 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-sm text-blue-700 dark:border-blue-900 dark:bg-blue-950/20 dark:text-blue-300">
+                                    {option.instruction}
+                                </div>
+                            ) : null}
                         </div>
-                    </button>
-                ))}
+                    );
+                })}
             </div>
 
-            <style jsx>{`
-                .payment-methods {
-                    background: rgba(255, 255, 255, 0.7);
-                    backdrop-filter: blur(10px);
-                    border: 1px solid rgba(255, 255, 255, 0.4);
-                    border-radius: 20px;
-                    padding: 2rem;
-                    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05);
-                }
-
-                .payment-option {
-                    width: 100%;
-                    text-align: right;
-                    padding: 1.25rem;
-                    border: 1px solid rgba(209, 213, 219, 0.5);
-                    border-radius: 16px;
-                    background: rgba(255, 255, 255, 0.5);
-                    cursor: pointer;
-                    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-                    position: relative;
-                    overflow: hidden;
-                }
-
-                .payment-option:hover {
-                    border-color: #2563eb;
-                    background: white;
-                    transform: translateY(-2px);
-                    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
-                }
-
-                .payment-option.selected {
-                    border-color: #2563eb;
-                    background: rgba(37, 99, 235, 0.05);
-                    box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1);
-                }
-
-                .icon-container {
-                    width: 56px;
-                    height: 56px;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    background: white;
-                    border-radius: 12px;
-                    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
-                    transition: all 0.3s ease;
-                }
-
-                .payment-option.selected .icon-container {
-                    background: #2563eb;
-                    color: white;
-                }
-
-                .radio-indicator {
-                    width: 24px;
-                    height: 24px;
-                    border: 2px solid rgba(209, 213, 219, 0.8);
-                    border-radius: 50%;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    transition: all 0.3s ease;
-                    background: white;
-                }
-
-                .payment-option.selected .radio-indicator {
-                    border-color: #2563eb;
-                    background: white;
-                }
-
-                .radio-inner {
-                    width: 12px;
-                    height: 12px;
-                    background: #2563eb;
-                    border-radius: 50%;
-                    animation: scaleIn 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
-                }
-
-                @keyframes scaleIn {
-                    from { transform: scale(0); opacity: 0; }
-                    to { transform: scale(1); opacity: 1; }
-                }
-            `}</style>
-        </div>
+            {error ? <p id="payment-method-error" className="mt-3 text-xs text-red-600 dark:text-red-400">{error}</p> : null}
+        </fieldset>
     );
 }

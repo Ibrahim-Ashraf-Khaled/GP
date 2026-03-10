@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { supabaseService } from '@/services/supabaseService';
 import { supabase } from '@/lib/supabase';
-import Header from '@/components/Header';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { formatDistanceToNow } from 'date-fns';
@@ -62,7 +61,6 @@ export default function MessagesPage() {
     if (!isAuthenticated) {
         return (
             <main className="min-h-screen bg-gray-50 dark:bg-black" dir="rtl">
-                <Header />
                 <div className="flex flex-col items-center justify-center min-h-[60vh] p-4 text-center">
                     <span className="material-symbols-outlined text-6xl text-gray-300 mb-4">lock</span>
                     <h2 className="text-xl font-bold mb-2 text-gray-900 dark:text-white">يرجى تسجيل الدخول</h2>
@@ -77,7 +75,6 @@ export default function MessagesPage() {
 
     return (
         <main className="min-h-screen bg-gray-50 dark:bg-black pb-24" dir="rtl">
-            <Header />
 
             {/* Security Alert */}
             <SecurityAlert />

@@ -1,17 +1,39 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import { getNotifications, markNotificationAsRead, markAllNotificationsAsRead, getUnreadNotificationCount } from '@/lib/storage';
 import type { Notification } from '@/types';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
+import NotificationsSheet from './notifications/NotificationsSheet';
+import NotificationsPopover from './notifications/NotificationsPopover';
 
 export default function Header() {
+    const pathname = usePathname();
     const { user, logout, isAuthenticated } = useAuth();
     const [notifications, setNotifications] = useState<Notification[]>([]);
     const [showNotifications, setShowNotifications] = useState(false);
     const [unreadCount, setUnreadCount] = useState(0);
+    const [isScrolledState, setIsScrolledState] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
+    const [mounted, setMounted] = useState(false);
+    const isDesktop = useMediaQuery('(min-width: 768px)');
+
+    const isHome = pathname === '/';
+    const isScrolled = isScrolledState || !isHome;
+
+    useEffect(() => {
+        setMounted(true);
+        const handleScroll = () => {
+            setIsScrolledState(window.scrollY > 20);
+        };
+        window.addEventListener('scroll', handleScroll);
+        // Initial check
+        handleScroll();
+        return () => window.removeEventListener('scroll', handleScroll);
+    }, []);
 
     useEffect(() => {
         if (user) {
@@ -21,21 +43,9 @@ export default function Header() {
         }
     }, [user]);
 
-    useEffect(() => {
-        const handleClickOutside = (event: MouseEvent) => {
-            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-                setShowNotifications(false);
-            }
-        };
-
-        if (showNotifications) {
-            document.addEventListener('mousedown', handleClickOutside);
-        }
-
-        return () => {
-            document.removeEventListener('mousedown', handleClickOutside);
-        };
-    }, [showNotifications]);
+    // Outside click logic is handled within the components or selectively here if needed.
+    // However, to keep it clean and match the desired behavior, we use the specific components.
+    // Removed old handleClickOutside from here as the components handle their own closing logic better.
 
     const handleNotificationClick = (notification: Notification) => {
         markNotificationAsRead(notification.id);
@@ -85,133 +95,106 @@ export default function Header() {
     };
 
     return (
-        <header className="sticky top-0 z-50 glass border-b border-gray-100 dark:border-gray-800 px-4 py-3 bg-white/80 dark:bg-black/80 backdrop-blur-md">
-            <div className="flex items-center justify-between max-w-7xl mx-auto">
-                {/* User Profile Section - LEFT */}
-                {isAuthenticated && user ? (
-                    <div className="flex items-center gap-4">
-                        <Link href="/profile" className="flex items-center gap-3 group">
-                            <div className="relative">
-                                <div className="bg-cover bg-center rounded-full size-10 border-2 border-primary/20 bg-gray-100 flex items-center justify-center overflow-hidden">
-                                    {user.avatar ? (
-                                        <img src={user.avatar} alt={user.name} className="w-full h-full object-cover" />
-                                    ) : (
-                                        <span className="font-bold text-gray-500">{user.name.charAt(0)}</span>
+        <header className={`w-full transition-all duration-300 py-3 ${isScrolled ? "bg-white/90 dark:bg-gray-900/90 backdrop-blur-md shadow-sm border-b border-gray-200 dark:border-gray-800" : "bg-transparent md:bg-transparent bg-white/80 dark:bg-black/80"}`}>
+            <div className="flex items-center justify-between w-full max-w-7xl mx-auto px-6 relative">
+                {/* Right Side (Brand) */}
+                <div className="flex items-center">
+                    <Link href="/" className="flex items-center gap-2 group">
+                        <div className="size-10 bg-primary text-white rounded-xl flex items-center justify-center font-bold text-xl shadow-lg transition-transform group-hover:scale-105 shrink-0">ع</div>
+                        <span className={`text-base md:text-xl font-bold transition-colors ${isScrolled ? 'text-gray-900 dark:text-white group-hover:text-primary' : 'text-gray-900 dark:text-white md:text-white drop-shadow-md md:group-hover:text-white/90'}`}>عقارات جمصة</span>
+                    </Link>
+                </div>
+
+                {/* Center (Desktop Nav Links) */}
+                <nav className="hidden md:flex items-center justify-center gap-6 absolute left-1/2 -translate-x-1/2 whitespace-nowrap">
+                    <Link href="/" className={`font-medium transition-colors hover:text-primary ${pathname === '/' ? (isScrolled ? 'text-primary underline underline-offset-4 decoration-2' : 'text-white underline underline-offset-4 decoration-2 drop-shadow-md') : (isScrolled ? 'text-gray-700 dark:text-gray-300' : 'text-white/90 drop-shadow-md')}`}>الرئيسية</Link>
+                    <Link href="/favorites" className={`font-medium transition-colors hover:text-primary ${pathname === '/favorites' ? (isScrolled ? 'text-primary underline underline-offset-4 decoration-2' : 'text-white underline underline-offset-4 decoration-2 drop-shadow-md') : (isScrolled ? 'text-gray-700 dark:text-gray-300' : 'text-white/90 drop-shadow-md')}`}>المفضلة</Link>
+                    <Link href="/bookings" className={`font-medium transition-colors hover:text-primary ${pathname === '/bookings' ? (isScrolled ? 'text-primary underline underline-offset-4 decoration-2' : 'text-white underline underline-offset-4 decoration-2 drop-shadow-md') : (isScrolled ? 'text-gray-700 dark:text-gray-300' : 'text-white/90 drop-shadow-md')}`}>حجوزاتي</Link>
+                    <Link href="/profile" className={`font-medium transition-colors hover:text-primary ${pathname === '/profile' ? (isScrolled ? 'text-primary underline underline-offset-4 decoration-2' : 'text-white underline underline-offset-4 decoration-2 drop-shadow-md') : (isScrolled ? 'text-gray-700 dark:text-gray-300' : 'text-white/90 drop-shadow-md')}`}>حسابي</Link>
+                </nav>
+
+                {/* Left Side (Actions) */}
+                <div className="flex items-center gap-3 lg:gap-4 shrink-0">
+
+                    {/* User Profile / Login */}
+                    {isAuthenticated && user ? (
+                        <div className="flex items-center gap-3">
+                            {/* Notification Button */}
+                            <div className="relative flex items-center" ref={dropdownRef}>
+                                <button
+                                    data-notifications-trigger="true"
+                                    onClick={() => setShowNotifications(!showNotifications)}
+                                    className={`relative flex items-center justify-center size-10 rounded-full shadow-sm border transition-all duration-300 ${isScrolled
+                                        ? 'bg-white dark:bg-gray-800 border-gray-100 dark:border-white/10 hover:bg-gray-50 dark:hover:bg-white/20 text-gray-700 dark:text-gray-300'
+                                        : 'bg-white/20 backdrop-blur-md border-white/30 text-white hover:bg-white/40'}`}
+                                >
+                                    <span className="material-symbols-outlined text-[24px] pointer-events-none">
+                                        notifications
+                                    </span>
+                                    {unreadCount > 0 && (
+                                        <span className="absolute top-1.5 left-1.5 size-2.5 bg-red-500 rounded-full border-2 border-white dark:border-gray-800 shadow-sm animate-pulse"></span>
                                     )}
-                                </div>
-                                <div className="absolute bottom-0 right-0 size-3 bg-green-500 rounded-full border-2 border-white dark:border-background-dark"></div>
-                            </div>
-                            <div className="flex flex-col hidden sm:flex">
-                                <span className="text-xs text-gray-500 dark:text-gray-400 font-medium group-hover:text-primary transition-colors">
-                                    مرحباً بك 👋
-                                </span>
-                                <h2 className="text-base font-bold leading-tight text-gray-900 dark:text-white group-hover:text-primary transition-colors">
-                                    {user.name}
-                                </h2>
-                            </div>
-                        </Link>
-                        <button
-                            onClick={logout}
-                            className="p-2 text-gray-500 hover:text-red-500 transition-colors"
-                            title="تسجيل الخروج"
-                        >
-                            <span className="material-symbols-outlined">logout</span>
-                        </button>
-                    </div>
-                ) : (
-                    <div className="flex gap-2">
-                        <Link href="/login" className="px-4 py-2 bg-gray-100 dark:bg-zinc-800 rounded-xl font-medium hover:bg-gray-200 dark:hover:bg-zinc-700 transition-colors text-sm">
-                            تسجيل الدخول
-                        </Link>
-                        <Link href="/register" className="px-4 py-2 bg-primary text-white rounded-xl font-medium hover:bg-primary/90 transition-colors text-sm">
-                            إنشاء حساب
-                        </Link>
-                    </div>
-                )}
+                                </button>
 
-                {/* Right Side - Logo or Notifications */}
-                <div className="flex items-center gap-3">
-                    {/* Notification Button */}
-                    {isAuthenticated && (
-                        <div className="relative" ref={dropdownRef}>
-                            <button
-                                onClick={() => setShowNotifications(!showNotifications)}
-                                className="relative flex items-center justify-center size-10 rounded-full bg-white dark:bg-surface-dark shadow-sm border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-                            >
-                                <span className="material-symbols-outlined text-[24px] text-gray-700 dark:text-gray-300">
-                                    notifications
-                                </span>
-                                {unreadCount > 0 && (
-                                    <span className="absolute top-2 left-2 size-2 bg-red-500 rounded-full border border-white dark:border-surface-dark"></span>
+                                {/* Notifications Component Rendered based on device width */}
+                                {mounted && (
+                                    isDesktop ? (
+                                        <NotificationsPopover
+                                            open={showNotifications}
+                                            onClose={() => setShowNotifications(false)}
+                                            notifications={notifications}
+                                            unreadCount={unreadCount}
+                                            onNotificationClick={handleNotificationClick}
+                                            onMarkAllAsRead={handleMarkAllAsRead}
+                                            getNotificationIcon={getNotificationIcon}
+                                            getNotificationColor={getNotificationColor}
+                                        />
+                                    ) : (
+                                        <NotificationsSheet
+                                            open={showNotifications}
+                                            onClose={() => setShowNotifications(false)}
+                                            notifications={notifications}
+                                            unreadCount={unreadCount}
+                                            onNotificationClick={handleNotificationClick}
+                                            onMarkAllAsRead={handleMarkAllAsRead}
+                                            getNotificationIcon={getNotificationIcon}
+                                            getNotificationColor={getNotificationColor}
+                                        />
+                                    )
                                 )}
-                            </button>
+                            </div>
 
-                            {/* Notifications Dropdown */}
-                            {showNotifications && (
-                                <div className="absolute left-0 mt-2 w-80 bg-white dark:bg-gray-900 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 overflow-hidden animate-fadeIn z-50 origin-top-left">
-                                    <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between bg-gray-50/50 dark:bg-gray-800/50">
-                                        <h3 className="font-bold text-gray-900 dark:text-white">الإشعارات</h3>
-                                        {unreadCount > 0 && (
-                                            <button
-                                                onClick={handleMarkAllAsRead}
-                                                className="text-xs text-primary hover:text-primary/80 font-medium"
-                                            >
-                                                تحديد الكل كمقروء
-                                            </button>
-                                        )}
-                                    </div>
-                                    <div className="max-h-[70vh] overflow-y-auto custom-scrollbar">
-                                        {notifications.length === 0 ? (
-                                            <div className="p-8 text-center flex flex-col items-center justify-center">
-                                                <div className="size-16 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mb-3">
-                                                    <span className="material-symbols-outlined text-gray-400 text-3xl">
-                                                        notifications_off
-                                                    </span>
-                                                </div>
-                                                <p className="text-gray-500 dark:text-gray-400 font-medium">لا توجد إشعارات حالياً</p>
-                                            </div>
+                            {/* User Menu */}
+                            <Link href="/profile" className="flex items-center gap-2 group ml-2">
+                                <div className="relative">
+                                    <div className="bg-cover bg-center rounded-full size-10 border-2 border-primary/20 bg-gray-100 flex items-center justify-center overflow-hidden">
+                                        {user.avatar ? (
+                                            <img src={user.avatar} alt={user.name} className="w-full h-full object-cover" />
                                         ) : (
-                                            <div className="divide-y divide-gray-100 dark:divide-gray-800">
-                                                {notifications.map((notification) => (
-                                                    <button
-                                                        key={notification.id}
-                                                        onClick={() => handleNotificationClick(notification)}
-                                                        className={`w-full p-4 text-right hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors flex gap-3 ${!notification.isRead ? 'bg-primary/5 dark:bg-primary/10' : ''
-                                                            }`}
-                                                    >
-                                                        <div className={`mt-1 shrink-0 ${getNotificationColor(notification.type)}`}>
-                                                            <span className="material-symbols-outlined text-[20px]">
-                                                                {getNotificationIcon(notification.type)}
-                                                            </span>
-                                                        </div>
-                                                        <div className="flex-1 min-w-0">
-                                                            <div className="flex items-start justify-between gap-2 mb-1">
-                                                                <p className={`font-bold text-sm truncate ${!notification.isRead ? 'text-gray-900 dark:text-white' : 'text-gray-700 dark:text-gray-300'}`}>
-                                                                    {notification.title}
-                                                                </p>
-                                                                {!notification.isRead && (
-                                                                    <span className="size-2 bg-primary rounded-full shrink-0 mt-1.5 animate-pulse"></span>
-                                                                )}
-                                                            </div>
-                                                            <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed line-clamp-2 mb-1.5">
-                                                                {notification.message}
-                                                            </p>
-                                                            <p className="text-[10px] text-gray-400 font-medium">
-                                                                {new Date(notification.createdAt).toLocaleDateString('ar-EG', {
-                                                                    day: 'numeric',
-                                                                    month: 'short',
-                                                                    hour: '2-digit',
-                                                                    minute: '2-digit',
-                                                                })}
-                                                            </p>
-                                                        </div>
-                                                    </button>
-                                                ))}
-                                            </div>
+                                            <span className="font-bold text-gray-500">{user.name.charAt(0)}</span>
                                         )}
                                     </div>
+                                    <div className="absolute bottom-0 left-0 size-3 bg-green-500 rounded-full border-2 border-white dark:border-background-dark"></div>
                                 </div>
-                            )}
+                            </Link>
+
+                            {/* Logout button */}
+                            <button
+                                onClick={logout}
+                                className={`p-2 transition-colors rounded-full ${isScrolled ? 'text-gray-500 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30' : 'text-white/80 hover:text-white hover:bg-white/20'}`}
+                                title="تسجيل الخروج"
+                            >
+                                <span className="material-symbols-outlined text-[20px]">logout</span>
+                            </button>
+                        </div>
+                    ) : (
+                        <div className="flex gap-2">
+                            <Link href="/auth?mode=login" className={`px-4 py-2 rounded-xl font-medium transition-colors text-sm ${isScrolled ? 'bg-gray-100 dark:bg-zinc-800 hover:bg-gray-200 dark:hover:bg-zinc-700 text-gray-900 dark:text-white' : 'bg-white/20 text-white hover:bg-white/30 backdrop-blur-md'}`}>
+                                تسجيل الدخول
+                            </Link>
+                            <Link href="/auth?mode=signup" className="px-4 py-2 bg-primary text-white rounded-xl font-medium hover:bg-primary/90 transition-colors shadow-lg shadow-primary/30 text-sm">
+                                إنشاء حساب
+                            </Link>
                         </div>
                     )}
                 </div>

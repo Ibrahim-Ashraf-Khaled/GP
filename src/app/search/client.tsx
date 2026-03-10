@@ -1,12 +1,27 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { PropertyCard } from '@/components/PropertyCard';
-import { BottomNav } from '@/components/BottomNav';
+import { normalizeFeatureIds } from '@/config/features';
+
 import { Property } from '@/types';
 import SearchFilters from '@/components/SearchFilters';
 import MapView from '@/components/MapView';
+
+import BottomSheet from '@/components/search/BottomSheet';
+import FloatingActions from '@/components/search/FloatingActions';
+import SortSheet, { SortOption } from '@/components/search/SortSheet';
+
+type FiltersState = {
+  category: string;
+  minPrice?: string;
+  maxPrice?: string;
+  bedrooms?: string;
+  bathrooms?: string;
+  area: string;
+  features?: string; // csv
+};
 
 interface SearchPageClientProps {
   initialProperties: Property[];
@@ -16,171 +31,214 @@ interface SearchPageClientProps {
     minPrice?: string;
     maxPrice?: string;
     bedrooms?: string;
+    bathrooms?: string;
     area?: string;
+    features?: string;
   };
 }
 
-export default function SearchPageClient({
-  initialProperties,
-  initialSearchParams,
-}: SearchPageClientProps) {
+const normalizeFeatureCsv = (value?: string) => normalizeFeatureIds(value?.split(',') ?? []).join(',');
+
+export default function SearchPageClient({ initialProperties, initialSearchParams }: SearchPageClientProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  // Client state
+  const normalizeAll = (v?: string) => (!v || v === 'الكل' ? 'all' : v);
+  const handleBack = () => router.back();
+
   const [properties, setProperties] = useState<Property[]>(initialProperties);
-  const [loading, setLoading] = useState(false);
+
   const [searchQuery, setSearchQuery] = useState(initialSearchParams.q || '');
-  const [showFilters, setShowFilters] = useState(false);
+
   const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
 
-  // Initialize filters from URL params
-  const [activeFilters, setActiveFilters] = useState({
+  const [sort, setSort] = useState<SortOption>('newest');
+
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [isSortOpen, setIsSortOpen] = useState(false);
+
+  const [activeFilters, setActiveFilters] = useState<FiltersState>({
     category: initialSearchParams.category || 'all',
     minPrice: initialSearchParams.minPrice || '',
     maxPrice: initialSearchParams.maxPrice || '',
     bedrooms: initialSearchParams.bedrooms || '',
-    area: initialSearchParams.area || 'all',
+    bathrooms: initialSearchParams.bathrooms || '',
+    area: normalizeAll(initialSearchParams.area) || 'all',
+    features: normalizeFeatureCsv(initialSearchParams.features),
   });
 
-  // Update URL when filters change (triggers server re-fetch)
-  const handleFilterChange = (newFilters: typeof activeFilters) => {
-    setActiveFilters(newFilters);
-    
-    // Build new URL with filters
-    const params = new URLSearchParams();
-    
-    if (searchQuery) params.set('q', searchQuery);
-    if (newFilters.category && newFilters.category !== 'all') params.set('category', newFilters.category);
-    if (newFilters.minPrice) params.set('minPrice', newFilters.minPrice);
-    if (newFilters.maxPrice) params.set('maxPrice', newFilters.maxPrice);
-    if (newFilters.bedrooms) params.set('bedrooms', newFilters.bedrooms);
-    if (newFilters.area && newFilters.area !== 'all') params.set('area', newFilters.area);
-    
-    const newUrl = params.toString() ? `/search?${params.toString()}` : '/search';
-    router.push(newUrl);
-  };
-
-  // Handle search query change
-  const handleSearch = (query: string) => {
-    setSearchQuery(query);
-    
-    const params = new URLSearchParams(searchParams.toString());
-    if (query) {
-      params.set('q', query);
-    } else {
-      params.delete('q');
-    }
-    
-    const newUrl = params.toString() ? `/search?${params.toString()}` : '/search';
-    router.push(newUrl);
-  };
-
-  // Sync client state with URL params when navigation occurs
+  // Sync client results when server props change
   useEffect(() => {
-    const currentParams = Object.fromEntries(searchParams.entries());
-    
+    setProperties(initialProperties);
+  }, [initialProperties]);
+
+  const buildUrl = (q: string, f: FiltersState) => {
+    const params = new URLSearchParams();
+
+    if (q) params.set('q', q);
+
+    if (f.category && f.category !== 'all') params.set('category', f.category);
+    if (f.minPrice) params.set('minPrice', f.minPrice);
+    if (f.maxPrice) params.set('maxPrice', f.maxPrice);
+    if (f.bedrooms) params.set('bedrooms', f.bedrooms);
+    if (f.bathrooms) params.set('bathrooms', f.bathrooms);
+    if (f.area && f.area !== 'all') params.set('area', f.area);
+    if (f.features) params.set('features', f.features);
+
+    // sort يبقى client-side الآن (ممكن ننقله للـ server لاحقًا)
+    const newUrl = params.toString() ? `/search?${params.toString()}` : '/search';
+    return newUrl;
+  };
+
+  // Debounce search input (UX أفضل للموبايل)
+  useEffect(() => {
+    const currentQ = searchParams.get('q') || '';
+    const trimmed = searchQuery.trim();
+
+    if (trimmed === currentQ) return;
+
+    const t = setTimeout(() => {
+      router.replace(buildUrl(trimmed, activeFilters));
+    }, 400);
+
+    return () => clearTimeout(t);
+  }, [searchQuery, searchParams, router, activeFilters]);
+
+  // Update state from URL when navigation occurs
+  useEffect(() => {
+    const current = Object.fromEntries(searchParams.entries());
+
     setActiveFilters({
-      category: currentParams.category || 'all',
-      minPrice: currentParams.minPrice || '',
-      maxPrice: currentParams.maxPrice || '',
-      bedrooms: currentParams.bedrooms || '',
-      area: currentParams.area || 'all',
+      category: current.category || 'all',
+      minPrice: current.minPrice || '',
+      maxPrice: current.maxPrice || '',
+      bedrooms: current.bedrooms || '',
+      bathrooms: current.bathrooms || '',
+      area: normalizeAll(current.area) || 'all',
+      features: normalizeFeatureCsv(current.features),
     });
-    
-    setSearchQuery(currentParams.q || '');
+
+    setSearchQuery(current.q || '');
   }, [searchParams]);
 
+  // Called from SearchFilters (debounced inside it)
+  const handleFilterChange = (next: any) => {
+    const featuresCsv = Array.isArray(next.features) ? next.features.join(',') : '';
+
+    const merged: FiltersState = {
+      category: next.category || 'all',
+      minPrice: next.minPrice ? String(next.minPrice) : '',
+      maxPrice: next.maxPrice ? String(next.maxPrice) : '',
+      bedrooms: next.bedrooms ? String(next.bedrooms) : '',
+      bathrooms: next.bathrooms ? String(next.bathrooms) : '',
+      area: next.area ? String(next.area) : 'all',
+      features: featuresCsv,
+    };
+
+    setActiveFilters(merged);
+    router.replace(buildUrl(searchQuery.trim(), merged));
+  };
+
+  const appliedCount = useMemo(() => {
+    let c = 0;
+    if (activeFilters.category && activeFilters.category !== 'all') c++;
+    if (activeFilters.area && activeFilters.area !== 'all') c++;
+    if (activeFilters.minPrice) c++;
+    if (activeFilters.maxPrice) c++;
+    if (activeFilters.bedrooms) c++;
+    if (activeFilters.bathrooms) c++;
+    if (activeFilters.features) c++;
+    return c;
+  }, [activeFilters]);
+
+  const sortedProperties = useMemo(() => {
+    if (sort === 'newest') return properties;
+    const copy = [...properties];
+    if (sort === 'price_asc') copy.sort((a, b) => (a.price || 0) - (b.price || 0));
+    if (sort === 'price_desc') copy.sort((a, b) => (b.price || 0) - (a.price || 0));
+    return copy;
+  }, [properties, sort]);
+
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-black pb-24">
+    <div className="min-h-screen bg-gray-50 dark:bg-black pb-6 md:pb-6">
       {/* Header */}
       <div className="sticky top-0 z-30 bg-white/80 dark:bg-black/80 backdrop-blur-xl px-4 py-4 border-b border-gray-200 dark:border-white/10 transition-all duration-300">
-        <div className="max-w-5xl mx-auto relative group">
-          <input
-            type="text"
-            placeholder="ابحث بالاسم أو المنطقة..."
-            className="w-full p-4 pr-12 rounded-2xl bg-gray-100 dark:bg-white/10 border-2 border-transparent focus:border-primary/50 focus:bg-white dark:focus:bg-black text-gray-900 dark:text-white transition-all outline-none shadow-sm placeholder-gray-500"
-            value={searchQuery}
-            onChange={(e) => handleSearch(e.target.value)}
-          />
-          <span className="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-primary transition-colors">search</span>
+        <div className="flex items-center gap-3 max-w-5xl mx-auto">
+          <button onClick={handleBack} className="h-11 w-11 rounded-2xl bg-gray-100 dark:bg-white/10 flex items-center justify-center shrink-0" aria-label="رجوع">
+            <span className="material-symbols-outlined">arrow_forward</span>
+          </button>
+          <div className="relative flex-1 group">
+            <input
+              type="text"
+              placeholder="ابحث بالاسم أو المنطقة..."
+              className="w-full p-4 pr-12 rounded-2xl bg-gray-100 dark:bg-white/10 border-2 border-transparent focus:border-primary/50 focus:bg-white dark:focus:bg-black text-gray-900 dark:text-white transition-all outline-none shadow-sm placeholder-gray-500"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+            <span className="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-primary transition-colors">
+              search
+            </span>
+          </div>
         </div>
       </div>
 
-      {/* Filters Toggle (Mobile) */}
-      <div className="px-4 py-3 max-w-5xl mx-auto flex items-center justify-between">
-        <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-          <span>{properties.length} عقار</span>
-          {loading && <span>• جاري البحث...</span>}
-        </div>
-        
-        <div className="flex items-center gap-2">
-          {/* View Mode Toggle */}
-          <div className="flex bg-white dark:bg-white/10 rounded-xl p-1">
-            <button
-              onClick={() => setViewMode('list')}
-              className={`p-2 rounded-lg transition-colors ${
-                viewMode === 'list'
-                  ? 'bg-primary text-white'
-                  : 'text-gray-600 dark:text-gray-400'
-              }`}
-            >
-              <span className="material-symbols-outlined text-[18px]">view_list</span>
+      {/* Desktop filters (optional) */}
+      <div className="hidden md:block px-4 py-4 max-w-5xl mx-auto">
+        <div className="flex items-center justify-between">
+          <div className="text-sm text-gray-600 dark:text-gray-400">
+            عرض {sortedProperties.length} مسكن
+          </div>
+          <div className="flex gap-2">
+            <button onClick={() => setIsFilterOpen(true)} className="flex items-center gap-2 px-4 h-10 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 text-sm">
+              <span className="material-symbols-outlined text-[18px]">tune</span>
+              فلترة {appliedCount > 0 && <span className="bg-primary text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">{appliedCount}</span>}
             </button>
-            <button
-              onClick={() => setViewMode('map')}
-              className={`p-2 rounded-lg transition-colors ${
-                viewMode === 'map'
-                  ? 'bg-primary text-white'
-                  : 'text-gray-600 dark:text-gray-400'
-              }`}
-            >
-              <span className="material-symbols-outlined text-[18px]">map</span>
+
+            <button onClick={() => setViewMode(v => v === 'list' ? 'map' : 'list')} className="flex items-center gap-2 px-4 h-10 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 text-sm">
+              <span className="material-symbols-outlined text-[18px]">{viewMode === 'list' ? 'map' : 'format_list_bulleted'}</span>
+              {viewMode === 'list' ? 'الخريطة' : 'القائمة'}
+            </button>
+
+            <button onClick={() => setSort('newest')} className={`flex items-center gap-2 px-4 h-10 rounded-xl border text-sm ${sort === 'newest' ? 'border-primary text-primary bg-primary/5' : 'border-gray-200 dark:border-white/10'}`}>
+              <span className="material-symbols-outlined text-[18px]">schedule</span> الأحدث
+            </button>
+
+            <button onClick={() => setSort('price_asc')} className={`flex items-center gap-2 px-4 h-10 rounded-xl border text-sm ${sort === 'price_asc' ? 'border-primary text-primary bg-primary/5' : 'border-gray-200 dark:border-white/10'}`}>
+              <span className="material-symbols-outlined text-[18px]">arrow_upward</span> الأقل سعرًا
+            </button>
+
+            <button onClick={() => setSort('price_desc')} className={`flex items-center gap-2 px-4 h-10 rounded-xl border text-sm ${sort === 'price_desc' ? 'border-primary text-primary bg-primary/5' : 'border-gray-200 dark:border-white/10'}`}>
+              <span className="material-symbols-outlined text-[18px]">arrow_downward</span> الأعلى سعرًا
             </button>
           </div>
-
-          {/* Filter Toggle */}
-          <button
-            onClick={() => setShowFilters(!showFilters)}
-            className="bg-white dark:bg-white/10 px-3 py-2 rounded-xl text-gray-600 dark:text-gray-400 flex items-center gap-2 hover:bg-gray-100 dark:hover:bg-white/20 transition-colors"
-          >
-            <span className="material-symbols-outlined text-[18px]">tune</span>
-            <span className="text-sm">الفلترة</span>
-          </button>
         </div>
       </div>
-
-      {/* Filter Panel */}
-      {showFilters && (
-        <div className="px-4 pb-4 max-w-5xl mx-auto">
-          <SearchFilters
-            filters={activeFilters}
-            onFiltersChange={handleFilterChange}
-            onClear={() => handleFilterChange({
-              category: 'all',
-              minPrice: '',
-              maxPrice: '',
-              bedrooms: '',
-              area: 'all',
-            })}
-          />
-        </div>
-      )}
 
       {/* Results */}
       <div className="px-4 py-4 max-w-5xl mx-auto">
         {viewMode === 'list' ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {properties.map((property) => (
-              <PropertyCard key={property.id} {...property} />
+            {sortedProperties.map((property) => (
+              <PropertyCard
+                key={property.id}
+                id={property.id}
+                title={property.title}
+                location={property.location.address}
+                price={property.price}
+                priceUnit={property.priceUnit}
+                image={property.images[0] || '/placeholder.jpg'}
+                bedrooms={property.bedrooms}
+                bathrooms={property.bathrooms}
+                area={property.area}
+                isVerified={property.isVerified}
+              />
             ))}
           </div>
         ) : (
-          <MapView properties={properties} />
+          <MapView properties={sortedProperties} />
         )}
 
-        {/* No Results */}
-        {!loading && properties.length === 0 && (
+        {sortedProperties.length === 0 && (
           <div className="text-center py-16">
             <span className="material-symbols-outlined text-6xl text-gray-300 mb-4">search_off</span>
             <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">لا توجد نتائج</h3>
@@ -189,7 +247,57 @@ export default function SearchPageClient({
         )}
       </div>
 
-      <BottomNav />
+      {/* Floating actions (mobile) */}
+      <div className="md:hidden">
+        <FloatingActions
+          onOpenFilters={() => setIsFilterOpen(true)}
+          onOpenSort={() => setIsSortOpen(true)}
+          onToggleMap={() => setViewMode((v) => (v === 'list' ? 'map' : 'list'))}
+          viewMode={viewMode}
+          appliedCount={appliedCount}
+          resultsCount={sortedProperties.length}
+        />
+      </div>
+
+      {/* Filter sheet */}
+      <BottomSheet
+        open={isFilterOpen}
+        title="عناصر التصفية"
+        onClose={() => setIsFilterOpen(false)}
+        footer={
+          <button
+            onClick={() => setIsFilterOpen(false)}
+            className="w-full h-12 rounded-2xl bg-primary text-white font-bold"
+          >
+            عرض النتائج ({sortedProperties.length})
+          </button>
+        }
+      >
+        <SearchFilters
+          onFilterChange={handleFilterChange}
+          initialFilters={{
+            category: activeFilters.category,
+            minPrice: activeFilters.minPrice,
+            maxPrice: activeFilters.maxPrice,
+            bedrooms: activeFilters.bedrooms,
+            bathrooms: activeFilters.bathrooms,
+            area: activeFilters.area,
+            features: activeFilters.features ? activeFilters.features.split(',') : [],
+          }}
+          variant="sheet"
+          showHeader={false}
+        />
+      </BottomSheet>
+
+      {/* Sort sheet */}
+      <SortSheet
+        open={isSortOpen}
+        onClose={() => setIsSortOpen(false)}
+        value={sort}
+        onChange={(v) => setSort(v)}
+      />
+
+
     </div>
   );
 }

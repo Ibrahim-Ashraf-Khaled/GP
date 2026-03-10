@@ -34,6 +34,19 @@ export const SystemMessage = ({ type, data, onAction }: SystemMessageProps) => {
         );
     }
 
+    if (type === 'booking_request') {
+        return (
+            <div className="flex justify-center my-4 px-4">
+                <div className="max-w-sm rounded-lg border border-blue-200 bg-blue-50 p-3 text-center dark:border-blue-900/50 dark:bg-blue-950/20">
+                    <p className="flex items-center justify-center gap-2 text-sm text-blue-800 dark:text-blue-200">
+                        <span className="material-symbols-outlined text-lg">event_note</span>
+                        {data?.text || 'تم إرسال طلب حجز جديد.'}
+                    </p>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="flex justify-center my-2 text-xs text-gray-400">
             <span>{data?.text || 'إشعار نظام'}</span>

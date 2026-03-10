@@ -14,7 +14,7 @@ export default function ProtectedRoute({ children }: { children: React.ReactNode
         if (!loading && !isAuthenticated) {
             // Encode the current path to redirect back after login
             const currentPath = window.location.pathname + window.location.search;
-            router.push(`/login?redirect=${encodeURIComponent(currentPath)}`);
+            router.push(`/auth?mode=login&redirect=${encodeURIComponent(currentPath)}`);
         }
     }, [isAuthenticated, loading, router]);
 

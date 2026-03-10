@@ -1,29 +1,34 @@
 import { createClient } from '@supabase/supabase-js';
 
-// التحقق من وجود المتغيرات
+// التحقق من وجود المتغيرات (Fail-Fast Guard)
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-if (!supabaseUrl || !supabaseAnonKey) {
-    console.warn(
-        '⚠️ Missing Supabase environment variables.\n' +
-        'Please add to .env.local:\n' +
+if (!supabaseUrl || !supabaseAnonKey ||
+    supabaseUrl.includes('placeholder') ||
+    supabaseAnonKey === 'placeholder') {
+    throw new Error(
+        '❌ Invalid Supabase configuration.\n' +
+        'Please add valid credentials to .env.local:\n' +
         '  NEXT_PUBLIC_SUPABASE_URL=your_supabase_url\n' +
         '  NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key\n' +
-        '\nUsing placeholder values for development.'
+        '\nRestart the server after updating the file.'
     );
 }
 
-// إنشاء العميل (بدون typed database لتجنب مشاكل التوافق)
+// إنشاء العميل
 export const supabase = createClient(
-    supabaseUrl || 'https://placeholder.supabase.co',
-    supabaseAnonKey || 'placeholder',
+    supabaseUrl,
+    supabaseAnonKey,
     {
         auth: {
             autoRefreshToken: true,
             persistSession: true,
             detectSessionInUrl: true,
         },
+        global: process.env.VITEST_SUPABASE_MOCK === '1' ? {
+            fetch: (...args) => fetch(...args),
+        } : undefined
     }
 );
 

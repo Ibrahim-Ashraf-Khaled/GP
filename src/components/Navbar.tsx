@@ -12,14 +12,14 @@ export default function Navbar() {
         { href: '/', label: 'الرئيسية', icon: 'home', filled: true },
         { href: '/favorites', label: 'المفضلة', icon: 'favorite' },
         {
-            href: isAuthenticated ? '/add-property' : '/login',
+            href: isAuthenticated ? '/add-property' : '/auth?mode=login',
             label: 'إضافة عقار',
             icon: 'add_circle',
             isSpecial: true
         },
         { href: '/search', label: 'حجوزاتي', icon: 'calendar_month' },
         {
-            href: isAuthenticated ? '/profile' : '/login',
+            href: isAuthenticated ? '/profile' : '/auth?mode=login',
             label: isAuthenticated ? 'حسابي' : 'دخول',
             icon: 'person'
         },

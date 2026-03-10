@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import React from 'react';
 
@@ -9,6 +9,11 @@ interface TenantFormProps {
     onNameChange: (name: string) => void;
     onPhoneChange: (phone: string) => void;
     onEmailChange: (email: string) => void;
+    errors?: {
+        tenantName?: string;
+        tenantPhone?: string;
+        tenantEmail?: string;
+    };
 }
 
 export default function TenantForm({
@@ -17,16 +22,21 @@ export default function TenantForm({
     tenantEmail,
     onNameChange,
     onPhoneChange,
-    onEmailChange
+    onEmailChange,
+    errors,
 }: TenantFormProps) {
+    const cardClasses = 'rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900';
+    const labelClasses = 'mb-1 block text-sm font-semibold text-gray-700 dark:text-zinc-200';
+    const inputClasses = 'w-full rounded-xl border bg-white px-3 py-2.5 text-sm text-gray-900 transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100';
+    const errorClasses = 'mt-1 text-xs text-red-600 dark:text-red-400';
+
     return (
-        <div className="tenant-form">
-            <h3 className="text-lg font-semibold mb-4">بيانات المستأجر</h3>
+        <div className={cardClasses}>
+            <h3 className="mb-4 text-base font-bold text-gray-900 dark:text-zinc-100">بيانات المستأجر</h3>
 
             <div className="space-y-4">
-                {/* الاسم الكامل */}
-                <div className="form-group">
-                    <label className="form-label" htmlFor="tenant-name">
+                <div>
+                    <label className={labelClasses} htmlFor="tenant-name">
                         الاسم الكامل <span className="text-red-500">*</span>
                     </label>
                     <input
@@ -34,102 +44,62 @@ export default function TenantForm({
                         type="text"
                         value={tenantName}
                         onChange={(e) => onNameChange(e.target.value)}
-                        className="form-input"
-                        placeholder="أدخل اسمك الكامل"
+                        className={inputClasses}
+                        placeholder="ادخل الاسم الكامل"
+                        autoComplete="name"
                         required
+                        aria-invalid={Boolean(errors?.tenantName)}
+                        aria-describedby={errors?.tenantName ? 'tenant-name-error' : undefined}
                     />
+                    {errors?.tenantName ? (
+                        <p id="tenant-name-error" className={errorClasses}>{errors.tenantName}</p>
+                    ) : null}
                 </div>
 
-                {/* رقم الهاتف */}
-                <div className="form-group">
-                    <label className="form-label" htmlFor="tenant-phone">
+                <div>
+                    <label className={labelClasses} htmlFor="tenant-phone">
                         رقم الهاتف <span className="text-red-500">*</span>
                     </label>
                     <input
                         id="tenant-phone"
                         type="tel"
+                        inputMode="numeric"
                         value={tenantPhone}
-                        onChange={(e) => onPhoneChange(e.target.value)}
-                        className="form-input"
-                        placeholder="01xxxxxxxxx"
-                        pattern="^01[0-9]{9}$"
+                        onChange={(e) => onPhoneChange(e.target.value.replace(/\D/g, '').slice(0, 11))}
+                        className={inputClasses}
+                        placeholder="01XXXXXXXXX"
+                        pattern="^01\d{9}$"
+                        autoComplete="tel"
                         required
+                        aria-invalid={Boolean(errors?.tenantPhone)}
+                        aria-describedby={errors?.tenantPhone ? 'tenant-phone-error' : 'tenant-phone-hint'}
                     />
-                    <p className="text-xs text-gray-500 mt-1">
-                        سنستخدم هذا الرقم للتواصل معك
-                    </p>
+                    <p id="tenant-phone-hint" className="mt-1 text-xs text-gray-500 dark:text-zinc-400">صيغة رقم مصري: 11 رقم يبدأ بـ 01</p>
+                    {errors?.tenantPhone ? (
+                        <p id="tenant-phone-error" className={errorClasses}>{errors.tenantPhone}</p>
+                    ) : null}
                 </div>
 
-                {/* البريد الإلكتروني */}
-                <div className="form-group">
-                    <label className="form-label" htmlFor="tenant-email">
-                        البريد الإلكتروني (اختياري)
+                <div>
+                    <label className={labelClasses} htmlFor="tenant-email">
+                        البريد الإلكتروني
                     </label>
                     <input
                         id="tenant-email"
                         type="email"
                         value={tenantEmail}
                         onChange={(e) => onEmailChange(e.target.value)}
-                        className="form-input"
-                        placeholder="example@email.com"
+                        className={inputClasses}
+                        placeholder="name@example.com"
+                        autoComplete="email"
+                        aria-invalid={Boolean(errors?.tenantEmail)}
+                        aria-describedby={errors?.tenantEmail ? 'tenant-email-error' : undefined}
                     />
+                    {errors?.tenantEmail ? (
+                        <p id="tenant-email-error" className={errorClasses}>{errors.tenantEmail}</p>
+                    ) : null}
                 </div>
             </div>
-
-            <style jsx>{`
-                .tenant-form {
-                    background: rgba(255, 255, 255, 0.7);
-                    backdrop-filter: blur(10px);
-                    border: 1px solid rgba(255, 255, 255, 0.4);
-                    border-radius: 20px;
-                    padding: 2rem;
-                    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05);
-                }
-
-                .form-group {
-                    display: flex;
-                    flex-direction: column;
-                    gap: 0.5rem;
-                }
-
-                .form-label {
-                    font-weight: 700;
-                    font-size: 0.9rem;
-                    color: #374151;
-                    text-align: right;
-                    margin-right: 0.25rem;
-                }
-
-                .form-input {
-                    width: 100%;
-                    padding: 0.875rem 1.25rem;
-                    background: rgba(255, 255, 255, 0.5);
-                    border: 1px solid rgba(209, 213, 219, 0.5);
-                    border-radius: 12px;
-                    font-size: 1rem;
-                    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-                    text-align: right;
-                    direction: rtl;
-                    color: #111827;
-                }
-
-                .form-input:focus {
-                    outline: none;
-                    background: white;
-                    border-color: #2563eb;
-                    box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1);
-                    transform: translateY(-1px);
-                }
-
-                .form-input:hover {
-                    border-color: #9ca3af;
-                    background: rgba(255, 255, 255, 0.8);
-                }
-
-                .form-input::placeholder {
-                    color: #9ca3af;
-                }
-            `}</style>
         </div>
     );
 }

@@ -18,6 +18,8 @@ CREATE TABLE IF NOT EXISTS profiles (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+CREATE INDEX IF NOT EXISTS idx_profiles_role ON profiles(role);
+
 -- تحديث الأعمدة المفقودة وإصلاح القيود
 DO $$
 BEGIN
@@ -122,6 +124,7 @@ CREATE TABLE IF NOT EXISTS payment_requests (
   payment_method TEXT CHECK (payment_method IN ('vodafone_cash', 'instapay', 'fawry')),
   receipt_image TEXT,
   status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
+  is_consumed BOOLEAN DEFAULT FALSE NOT NULL,
   admin_note TEXT,
   processed_at TIMESTAMP WITH TIME ZONE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
@@ -254,17 +257,44 @@ CREATE POLICY "Users can view own unlocked properties" ON unlocked_properties FO
 -- 1. handle_new_user
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
+DECLARE
+  v_raw_role TEXT;
+  v_role TEXT;
 BEGIN
-  INSERT INTO public.profiles (id, full_name, avatar_url, role)
-  VALUES (
-    NEW.id,
-    NEW.raw_user_meta_data->>'full_name',
-    NEW.raw_user_meta_data->>'avatar_url',
-    COALESCE(NEW.raw_user_meta_data->>'role', 'tenant')
-  );
+  v_raw_role := COALESCE(NEW.raw_user_meta_data->>'role', 'tenant');
+  v_role := CASE
+    WHEN btrim(lower(v_raw_role)) IN ('tenant') THEN 'tenant'
+    WHEN v_raw_role IN ('مستأجر', 'مستاجر') THEN 'tenant'
+    WHEN btrim(lower(v_raw_role)) IN ('landlord', 'owner') THEN 'landlord'
+    WHEN v_raw_role IN ('مؤجر', 'موجر', 'صاحب عقار') THEN 'landlord'
+    WHEN btrim(lower(v_raw_role)) IN ('admin') THEN 'admin'
+    WHEN v_raw_role IN ('مشرف', 'مدير') THEN 'admin'
+    ELSE 'tenant'
+  END;
+
+  BEGIN
+    INSERT INTO public.profiles (id, full_name, avatar_url, phone, role)
+    VALUES (
+      NEW.id,
+      COALESCE(NEW.raw_user_meta_data->>'full_name', NEW.raw_user_meta_data->>'name', ''),
+      NEW.raw_user_meta_data->>'avatar_url',
+      NEW.raw_user_meta_data->>'phone',
+      v_role
+    )
+    ON CONFLICT (id) DO UPDATE
+    SET
+      full_name = EXCLUDED.full_name,
+      avatar_url = EXCLUDED.avatar_url,
+      phone = EXCLUDED.phone,
+      role = EXCLUDED.role;
+  EXCEPTION
+    WHEN OTHERS THEN
+      RAISE WARNING 'handle_new_user failed for user %: %', NEW.id, SQLERRM;
+  END;
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = public;
 
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
@@ -303,14 +333,39 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+CREATE OR REPLACE FUNCTION get_public_property_booking_periods(p_property_id UUID)
+RETURNS TABLE(start_date DATE, end_date DATE) AS $$
+BEGIN
+  RETURN QUERY
+  SELECT b.start_date, b.end_date
+  FROM bookings b
+  WHERE b.property_id = p_property_id
+    AND b.status = 'confirmed'
+    AND b.end_date >= CURRENT_DATE
+  ORDER BY b.start_date ASC
+  LIMIT 1;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = public;
+
+REVOKE ALL ON FUNCTION get_public_property_booking_periods(UUID) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION get_public_property_booking_periods(UUID) TO anon, authenticated;
+
 -- Admin Policies
 DROP POLICY IF EXISTS "Admins can do everything on properties" ON properties;
 CREATE POLICY "Admins can do everything on properties" ON properties
   FOR ALL USING (
     EXISTS (
-      SELECT 1 FROM profiles 
-      WHERE profiles.id = auth.uid() 
-      AND profiles.is_admin = true
+      SELECT 1 FROM profiles
+      WHERE profiles.id = auth.uid()
+      AND (profiles.role = 'admin' OR profiles.is_admin = TRUE)
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM profiles
+      WHERE profiles.id = auth.uid()
+      AND (profiles.role = 'admin' OR profiles.is_admin = TRUE)
     )
   );
 
@@ -318,9 +373,16 @@ DROP POLICY IF EXISTS "Admins can manage payment requests" ON payment_requests;
 CREATE POLICY "Admins can manage payment requests" ON payment_requests
   FOR ALL USING (
     EXISTS (
-      SELECT 1 FROM profiles 
-      WHERE profiles.id = auth.uid() 
-      AND profiles.is_admin = true
+      SELECT 1 FROM profiles
+      WHERE profiles.id = auth.uid()
+      AND (profiles.role = 'admin' OR profiles.is_admin = TRUE)
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM profiles
+      WHERE profiles.id = auth.uid()
+      AND (profiles.role = 'admin' OR profiles.is_admin = TRUE)
     )
   );
 
@@ -328,9 +390,16 @@ DROP POLICY IF EXISTS "Admins can manage notifications" ON notifications;
 CREATE POLICY "Admins can manage notifications" ON notifications
   FOR ALL USING (
     EXISTS (
-      SELECT 1 FROM profiles 
-      WHERE profiles.id = auth.uid() 
-      AND profiles.is_admin = true
+      SELECT 1 FROM profiles
+      WHERE profiles.id = auth.uid()
+      AND (profiles.role = 'admin' OR profiles.is_admin = TRUE)
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM profiles
+      WHERE profiles.id = auth.uid()
+      AND (profiles.role = 'admin' OR profiles.is_admin = TRUE)
     )
   );
 

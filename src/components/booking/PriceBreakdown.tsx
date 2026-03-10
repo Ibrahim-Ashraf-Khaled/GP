@@ -1,6 +1,6 @@
-'use client';
+﻿'use client';
 
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import { RentalType } from '@/types';
 
 interface PriceBreakdownProps {
@@ -11,6 +11,8 @@ interface PriceBreakdownProps {
     serviceFee: number;
     depositAmount?: number;
     totalAmount: number;
+    compact?: boolean;
+    className?: string;
 }
 
 export default function PriceBreakdown({
@@ -20,116 +22,67 @@ export default function PriceBreakdown({
     basePrice,
     serviceFee,
     depositAmount,
-    totalAmount
+    totalAmount,
+    compact = false,
+    className = '',
 }: PriceBreakdownProps) {
+    const [isExpanded, setIsExpanded] = useState(false);
+
+    const formatter = useMemo(() => new Intl.NumberFormat('ar-EG'), []);
+    const formatNumber = (num: number) => formatter.format(Math.max(0, Number.isFinite(num) ? num : 0));
+
     const getUnitLabel = () => {
-        switch (rentalType) {
-            case 'daily':
-                return duration === 1 ? 'ليلة' : duration === 2 ? 'ليلتان' : 'ليالي';
-            case 'monthly':
-                return duration === 1 ? 'شهر' : duration === 2 ? 'شهران' : 'أشهر';
-            case 'seasonal':
-                return 'أشهر';
-            default:
-                return '';
-        }
+        if (rentalType === 'daily') return duration === 1 ? 'ليلة' : 'ليالي';
+        if (rentalType === 'monthly') return duration === 1 ? 'شهر' : 'أشهر';
+        return 'أشهر';
     };
 
+    const showDeposit = typeof depositAmount === 'number' && depositAmount > 0;
+    const showDetails = !compact || isExpanded;
+
     return (
-        <div className="price-breakdown">
-            <h3 className="text-lg font-semibold mb-4">تفاصيل الفاتورة</h3>
+        <section className={`rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 ${className}`}>
+            {compact ? (
+                <button
+                    type="button"
+                    onClick={() => setIsExpanded((prev) => !prev)}
+                    className="flex w-full items-center justify-between gap-3 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-right text-sm font-semibold text-gray-700 transition hover:bg-gray-100 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                    aria-expanded={isExpanded}
+                >
+                    <span>الإجمالي: {formatNumber(totalAmount)} ج.م</span>
+                    <span className="text-xs text-blue-600 dark:text-blue-300">{isExpanded ? 'إخفاء التفاصيل' : 'عرض التفاصيل'}</span>
+                </button>
+            ) : (
+                <h3 className="mb-4 text-base font-bold text-gray-900 dark:text-zinc-100">تفاصيل الفاتورة</h3>
+            )}
 
-            <div className="space-y-3">
-                {/* السعر الأساسي */}
-                <div className="flex justify-between items-center">
-                    <span className="text-gray-600">
-                        {duration} {getUnitLabel()} × {pricePerUnit.toLocaleString('ar-EG')} ج.م
-                    </span>
-                    <span className="font-medium">
-                        {basePrice.toLocaleString('ar-EG')} ج.م
-                    </span>
-                </div>
-
-                {/* رسوم الخدمة */}
-                <div className="flex justify-between items-center">
-                    <span className="text-gray-600">رسوم الخدمة (10%)</span>
-                    <span className="font-medium">
-                        {serviceFee.toLocaleString('ar-EG')} ج.م
-                    </span>
-                </div>
-
-                {/* التأمين (للإيجار الموسمي فقط) */}
-                {depositAmount && depositAmount > 0 && (
-                    <div className="deposit-card">
-                        <div className="flex justify-between items-center">
-                            <div>
-                                <span className="text-gray-700 font-bold">تأمين قابل للاسترداد</span>
-                                <p className="text-xs text-gray-500 mt-1">
-                                    سيتم استرداد التأمين عند نهاية الإيجار
-                                </p>
-                            </div>
-                            <span className="font-bold text-amber-700">
-                                {depositAmount.toLocaleString('ar-EG')} ج.م
-                            </span>
-                        </div>
+            {showDetails ? (
+                <div className="mt-4 space-y-3 text-sm">
+                    <div className="flex items-center justify-between gap-3 text-gray-700 dark:text-zinc-300">
+                        <span>{formatNumber(duration)} {getUnitLabel()} × {formatNumber(pricePerUnit)} ج.م</span>
+                        <span className="font-medium text-gray-900 dark:text-zinc-100">{formatNumber(basePrice)} ج.م</span>
                     </div>
-                )}
 
-                {/* الفاصل */}
-                <div className="divider"></div>
+                    <div className="flex items-center justify-between gap-3 text-gray-700 dark:text-zinc-300">
+                        <span>رسوم الخدمة (10%)</span>
+                        <span className="font-medium text-gray-900 dark:text-zinc-100">{formatNumber(serviceFee)} ج.م</span>
+                    </div>
 
-                {/* المجموع الكلي */}
-                <div className="total-card">
-                    <span className="text-lg font-bold text-gray-700">المجموع الكلي</span>
-                    <span className="total-amount">
-                        {totalAmount.toLocaleString('ar-EG')} ج.م
-                    </span>
+                    {showDeposit ? (
+                        <div className="flex items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-300">
+                            <span>تأمين قابل للاسترداد</span>
+                            <span className="font-semibold">{formatNumber(depositAmount!)} ج.م</span>
+                        </div>
+                    ) : null}
+
+                    <div className="h-px w-full bg-gray-200 dark:bg-zinc-700" />
+
+                    <div className="flex items-center justify-between gap-3 rounded-xl bg-blue-50 px-3 py-2 text-blue-700 dark:bg-blue-950/30 dark:text-blue-300">
+                        <span className="font-semibold">الإجمالي</span>
+                        <span className="text-lg font-black">{formatNumber(totalAmount)} ج.م</span>
+                    </div>
                 </div>
-            </div>
-
-            <style jsx>{`
-                .price-breakdown {
-                    background: rgba(255, 255, 255, 0.7);
-                    backdrop-filter: blur(10px);
-                    border: 1px solid rgba(255, 255, 255, 0.4);
-                    border-radius: 20px;
-                    padding: 2rem;
-                    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05);
-                }
-
-                .total-card {
-                    background: linear-gradient(135deg, rgba(37, 99, 235, 0.1) 0%, rgba(30, 64, 175, 0.1) 100%);
-                    backdrop-filter: blur(4px);
-                    border-radius: 16px;
-                    padding: 1.5rem;
-                    border: 1px solid rgba(37, 99, 235, 0.2);
-                    margin-top: 1.5rem;
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                }
-
-                .total-amount {
-                    font-size: 1.75rem;
-                    font-weight: 800;
-                    color: #2563eb;
-                    text-shadow: 0 2px 4px rgba(37, 99, 235, 0.1);
-                }
-
-                .deposit-card {
-                    background: rgba(254, 243, 199, 0.5);
-                    backdrop-filter: blur(4px);
-                    border: 1px solid rgba(252, 211, 77, 0.4);
-                    border-radius: 12px;
-                    padding: 1rem;
-                    margin-bottom: 1rem;
-                }
-
-                .divider {
-                    border-top: 1px solid rgba(209, 213, 219, 0.4);
-                    margin: 1.5rem 0;
-                }
-            `}</style>
-        </div>
+            ) : null}
+        </section>
     );
 }

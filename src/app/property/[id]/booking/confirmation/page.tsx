@@ -1,600 +1,292 @@
-'use client';
+﻿'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useAuth } from '@/context/AuthContext';
+import Image from 'next/image';
 import { supabaseService } from '@/services/supabaseService';
 import { Booking } from '@/types';
-import Image from 'next/image';
+import { useToast } from '@/components/ui/Toast';
+
+type UploadState = 'idle' | 'uploading' | 'done' | 'error';
+
+const PAYMENT_NUMBER = '01012345678';
+
+const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('ar-EG', { year: 'numeric', month: 'long', day: 'numeric' });
+};
+
+const formatMoney = (value: number) => new Intl.NumberFormat('ar-EG').format(value || 0);
 
 export default function ConfirmationPage() {
     const router = useRouter();
     const searchParams = useSearchParams();
-    const { user } = useAuth();
+    const { showToast } = useToast();
+
     const bookingId = searchParams.get('bookingId');
 
     const [booking, setBooking] = useState<Booking | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [uploading, setUploading] = useState(false);
-    const [receiptUploaded, setReceiptUploaded] = useState(false);
 
-    // جلب بيانات الحجز
+    const [uploadState, setUploadState] = useState<UploadState>('idle');
+    const [uploadMessage, setUploadMessage] = useState('');
+    const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+    const previewUrlRef = useRef<string | null>(null);
+
+    const receiptRefCode = useMemo(() => {
+        if (!booking?.id) return '-';
+        return booking.id.slice(0, 8).toUpperCase();
+    }, [booking?.id]);
+
+    const isElectronicPayment = booking?.paymentMethod === 'vodafone_cash' || booking?.paymentMethod === 'instapay';
+    const showUploadSection = Boolean(isElectronicPayment && booking && !booking.paymentProof);
+
     useEffect(() => {
+        let mounted = true;
+
         const fetchBooking = async () => {
             if (!bookingId) {
-                setError('رقم الحجز غير موجود');
+                setError('رقم الحجز غير موجود.');
                 setLoading(false);
                 return;
             }
 
             try {
-                const { data, error } = await supabaseService.getBookingById(bookingId);
-                if (error || !data) {
-                    setError('لم يتم العثور على الحجز');
+                const { data, error: fetchError } = await supabaseService.getBookingById(bookingId);
+                if (!mounted) return;
+
+                if (fetchError || !data) {
+                    setError('لم يتم العثور على هذا الحجز.');
                 } else {
                     setBooking(data);
                 }
-            } catch (err) {
-                setError('حدث خطأ أثناء تحميل بيانات الحجز');
+            } catch {
+                if (mounted) {
+                    setError('حدث خطأ أثناء تحميل بيانات الحجز.');
+                }
             } finally {
-                setLoading(false);
+                if (mounted) {
+                    setLoading(false);
+                }
             }
         };
 
         fetchBooking();
+
+        return () => {
+            mounted = false;
+            if (previewUrlRef.current) {
+                URL.revokeObjectURL(previewUrlRef.current);
+            }
+        };
     }, [bookingId]);
 
-    // معالجة رفع الإيصال
+    const handleCopyReference = async () => {
+        if (!booking) return;
+
+        try {
+            await navigator.clipboard.writeText(receiptRefCode);
+            setUploadMessage('تم نسخ رقم المرجع.');
+            showToast('تم نسخ رقم المرجع', 'success');
+        } catch {
+            setUploadMessage('تعذر النسخ. انسخ الرقم يدويا.');
+            showToast('تعذر نسخ الرقم', 'error');
+        }
+    };
+
     const handleReceiptUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
-        if (!file || !bookingId) return;
+        if (!file || !booking?.id) return;
 
-        // التحقق من نوع الملف
         if (!file.type.startsWith('image/')) {
-            alert('يرجى اختيار صورة فقط');
+            setUploadState('error');
+            setUploadMessage('يرجى اختيار صورة فقط.');
+            showToast('يرجى اختيار صورة فقط', 'error');
             return;
         }
 
-        // التحقق من حجم الملف (أقل من 5 ميجا)
         if (file.size > 5 * 1024 * 1024) {
-            alert('حجم الصورة كبير جداً. يرجى اختيار صورة أصغر من 5 ميجابايت');
+            setUploadState('error');
+            setUploadMessage('حجم الصورة يجب أن يكون أقل من 5 ميجابايت.');
+            showToast('الصورة أكبر من الحد المسموح', 'error');
             return;
         }
 
-        setUploading(true);
-        try {
-            const { url, error } = await supabaseService.uploadPaymentReceipt(bookingId, file);
-            if (error) {
-                alert('فشل رفع الإيصال');
-            } else {
-                setReceiptUploaded(true);
-                alert('تم رفع الإيصال بنجاح! سيتم مراجعته من قبل الإدارة.');
-            }
-        } catch (err) {
-            alert('حدث خطأ أثناء رفع الإيصال');
-        } finally {
-            setUploading(false);
+        if (previewUrlRef.current) {
+            URL.revokeObjectURL(previewUrlRef.current);
         }
-    };
 
-    const formatDate = (dateString: string) => {
-        const date = new Date(dateString);
-        return date.toLocaleDateString('ar-EG', {
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric'
-        });
-    };
+        const nextPreviewUrl = URL.createObjectURL(file);
+        previewUrlRef.current = nextPreviewUrl;
+        setPreviewUrl(nextPreviewUrl);
 
-    const copyToClipboard = (text: string) => {
-        navigator.clipboard.writeText(text);
-        alert('تم النسخ!');
+        setUploadState('uploading');
+        setUploadMessage('جاري رفع الإيصال...');
+
+        try {
+            const { url, error: uploadError } = await supabaseService.uploadPaymentReceipt(booking.id, file);
+            if (uploadError || !url) {
+                throw new Error(uploadError?.message || 'فشل رفع الإيصال.');
+            }
+
+            setBooking((prev) => (prev ? { ...prev, paymentProof: url } : prev));
+            setUploadState('done');
+            setUploadMessage('تم رفع الإيصال بنجاح. سيتم مراجعته قريبا.');
+            showToast('تم رفع الإيصال بنجاح', 'success');
+        } catch {
+            setUploadState('error');
+            setUploadMessage('فشل رفع الإيصال. حاول مرة أخرى.');
+            showToast('فشل رفع الإيصال', 'error');
+        }
     };
 
     if (loading) {
         return (
-            <div className="loading-container">
-                <div className="spinner"></div>
-                <p>جاري تحميل بيانات الحجز...</p>
+            <div className="flex min-h-screen items-center justify-center bg-background-light dark:bg-background-dark">
+                <div className="rounded-2xl border border-gray-200 bg-white px-6 py-5 text-center shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+                    <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
+                    <p className="mt-3 text-sm text-gray-600 dark:text-zinc-300">جاري تحميل بيانات الحجز...</p>
+                </div>
             </div>
         );
     }
 
     if (error || !booking) {
         return (
-            <div className="error-container">
-                <p className="error-message">{error || 'حدث خطأ ما'}</p>
-                <button onClick={() => router.push('/')} className="btn-home">
-                    العودة للرئيسية
-                </button>
-            </div>
-        );
-    }
-
-    const isElectronicPayment = booking.paymentMethod === 'vodafone_cash' || booking.paymentMethod === 'instapay';
-    const isCashOnDelivery = booking.paymentMethod === 'cash_on_delivery';
-
-    return (
-        <div className="confirmation-page">
-            <div className="container">
-                {/* أيقونة النجاح */}
-                <div className="success-icon-container">
-                    <div className="success-icon">
-                        <svg width="80" height="80" viewBox="0 0 80 80" fill="none">
-                            <circle cx="40" cy="40" r="36" stroke="#22c55e" strokeWidth="4" />
-                            <path d="M25 40 L35 50 L55 30" stroke="#22c55e" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                    </div>
-                </div>
-
-                {/* العنوان */}
-                <h1 className="page-title">
-                    {isCashOnDelivery ? 'تم تأكيد حجزك بنجاح! ✅' : 'تم إرسال طلب الحجز بنجاح! 🎉'}
-                </h1>
-
-                {/* بطاقة المعلومات */}
-                {isElectronicPayment && (
-                    <div className="info-card warning">
-                        <div className="info-icon">⏳</div>
-                        <div className="info-content">
-                            <h3>في انتظار تأكيد الدفع</h3>
-                            <p>يرجى التحويل إلى الرقم التالي:</p>
-                            <div className="phone-number" onClick={() => copyToClipboard('01012345678')}>
-                                <span>01012345678</span>
-                                <button className="copy-btn">نسخ</button>
-                            </div>
-                            <div className="amount-highlight">
-                                {booking.totalAmount.toLocaleString('ar-EG')} ج.م
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {isCashOnDelivery && (
-                    <div className="info-card success">
-                        <div className="info-icon">✓</div>
-                        <div className="info-content">
-                            <h3>سيتم الدفع عند استلام العقار</h3>
-                            <p>يرجى إحضار المبلغ نقداً عند الاستلام</p>
-                            <div className="amount-highlight">
-                                {booking.totalAmount.toLocaleString('ar-EG')} ج.م
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {/* رفع الإيصال */}
-                {isElectronicPayment && !receiptUploaded && !booking.paymentProof && (
-                    <div className="upload-section">
-                        <h3>ارفع صورة الإيصال</h3>
-                        <label className="upload-btn">
-                            <input
-                                type="file"
-                                accept="image/*"
-                                onChange={handleReceiptUpload}
-                                disabled={uploading}
-                                style={{ display: 'none' }}
-                            />
-                            <span>{uploading ? 'جاري الرفع...' : '📷 اختر صورة الإيصال'}</span>
-                        </label>
-                    </div>
-                )}
-
-                {receiptUploaded && (
-                    <div className="success-message">
-                        ✅ تم رفع الإيصال بنجاح! سيتم مراجعته قريباً.
-                    </div>
-                )}
-
-                {/* تفاصيل الحجز */}
-                <div className="booking-details">
-                    <h2 className="section-title">تفاصيل الحجز</h2>
-
-                    <div className="details-grid">
-                        <div className="detail-row">
-                            <span className="label">رقم الحجز</span>
-                            <span className="value">#{booking.id.substring(0, 8).toUpperCase()}</span>
-                        </div>
-
-                        <div className="detail-row">
-                            <span className="label">العقار</span>
-                            <span className="value">{booking.property?.title || 'غير محدد'}</span>
-                        </div>
-
-                        <div className="detail-row">
-                            <span className="label">الفترة</span>
-                            <span className="value">
-                                {formatDate(booking.startDate)} - {formatDate(booking.endDate)}
-                            </span>
-                        </div>
-
-                        <div className="detail-row">
-                            <span className="label">المدة</span>
-                            <span className="value">
-                                {booking.totalNights ? `${booking.totalNights} ليلة` :
-                                    booking.totalMonths ? `${booking.totalMonths} ${booking.totalMonths === 1 ? 'شهر' : 'أشهر'}` :
-                                        'غير محدد'}
-                            </span>
-                        </div>
-
-                        <div className="detail-row">
-                            <span className="label">المبلغ الإجمالي</span>
-                            <span className="value highlight">
-                                {booking.totalAmount.toLocaleString('ar-EG')} ج.م
-                            </span>
-                        </div>
-                    </div>
-                </div>
-
-                {/* بيانات المالك (للدفع عند الاستلام) */}
-                {isCashOnDelivery && booking.property && (
-                    <div className="owner-contact">
-                        <h2 className="section-title">بيانات المالك</h2>
-                        <div className="contact-options">
-                            <a href={`tel:${booking.property.ownerPhone}`} className="contact-btn phone">
-                                📞 الاتصال: {booking.property.ownerPhone}
-                            </a>
-                            <a
-                                href={`https://wa.me/2${booking.property.ownerPhone?.replace(/^0+/, '')}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="contact-btn whatsapp"
-                            >
-                                💬 واتساب
-                            </a>
-                        </div>
-                    </div>
-                )}
-
-                {/* ملاحظات مهمة */}
-                <div className="important-notes">
-                    <h2 className="section-title">ملاحظات مهمة</h2>
-                    <div className="notes-list">
-                        {isCashOnDelivery && (
-                            <>
-                                <div className="note">
-                                    <span className="note-icon">ℹ️</span>
-                                    <span>يرجى التواصل مع المالك لتنسيق موعد الاستلام</span>
-                                </div>
-                                <div className="note">
-                                    <span className="note-icon">🕐</span>
-                                    <span>موعد تسليم العقار: {formatDate(booking.startDate)} الساعة 2:00 ظهراً</span>
-                                </div>
-                            </>
-                        )}
-                        {isElectronicPayment && (
-                            <>
-                                <div className="note">
-                                    <span className="note-icon">📱</span>
-                                    <span>تأكد من التحويل إلى الرقم الصحيح</span>
-                                </div>
-                                <div className="note">
-                                    <span className="note-icon">📷</span>
-                                    <span>احتفظ بإيصال التحويل لحين التأكيد</span>
-                                </div>
-                            </>
-                        )}
-                    </div>
-                </div>
-
-                {/* أزرار الإجراءات */}
-                <div className="action-buttons">
-                    <button onClick={() => router.push('/bookings')} className="btn-primary">
-                        عرض حجوزاتي
-                    </button>
-                    <button onClick={() => router.push('/')} className="btn-secondary">
+            <div className="flex min-h-screen items-center justify-center bg-background-light px-4 py-8 dark:bg-background-dark">
+                <div className="w-full max-w-md rounded-2xl border border-red-200 bg-red-50 p-6 text-center dark:border-red-900 dark:bg-red-950/20">
+                    <p className="text-sm font-semibold text-red-700 dark:text-red-300">{error || 'حدث خطأ غير متوقع.'}</p>
+                    <button
+                        type="button"
+                        onClick={() => router.push('/')}
+                        className="mt-4 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700"
+                    >
                         العودة للرئيسية
                     </button>
                 </div>
             </div>
+        );
+    }
 
-            <style jsx>{`
-                .confirmation-page {
-                    min-height: 100vh;
-                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                    padding: 2rem 0;
-                }
+    return (
+        <div className="min-h-screen bg-background-light py-6 dark:bg-background-dark">
+            <div className="mx-auto w-full max-w-3xl space-y-4 px-4">
+                <section className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+                    <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-50 text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-300">
+                        <span className="material-symbols-outlined text-3xl">check_circle</span>
+                    </div>
 
-                .container {
-                    max-width: 800px;
-                    margin: 0 auto;
-                    padding: 0 1rem;
-                }
+                    <h1 className="text-xl font-bold text-gray-900 dark:text-zinc-100">تم إرسال طلب الحجز بنجاح</h1>
+                    <p className="mt-1 text-sm text-gray-600 dark:text-zinc-300">شكرًا يا {booking.tenantName || 'عميلنا'}.</p>
 
-                .loading-container, .error-container {
-                    min-height: 100vh;
-                    display: flex;
-                    flex-direction: column;
-                    align-items: center;
-                    justify-content: center;
-                    gap: 1rem;
-                    color: white;
-                }
+                    <div className="mt-4 flex flex-wrap items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 p-3 dark:border-zinc-700 dark:bg-zinc-950">
+                        <span className="text-xs text-gray-500 dark:text-zinc-400">رقم المرجع:</span>
+                        <span className="font-mono text-sm font-bold text-gray-900 dark:text-zinc-100">#{receiptRefCode}</span>
+                        <button
+                            type="button"
+                            onClick={handleCopyReference}
+                            className="mr-auto rounded-lg border border-gray-300 px-2.5 py-1 text-xs font-semibold text-gray-700 transition hover:bg-white dark:border-zinc-600 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                        >
+                            نسخ
+                        </button>
+                    </div>
+                    {uploadMessage ? <p className="mt-2 text-xs text-gray-600 dark:text-zinc-400">{uploadMessage}</p> : null}
+                </section>
 
-                .spinner {
-                    width: 50px;
-                    height: 50px;
-                    border: 4px solid rgba(255, 255, 255, 0.3);
-                    border-top-color: white;
-                    border-radius: 50%;
-                    animation: spin 0.8s linear infinite;
-                }
+                <section className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+                    <h2 className="mb-3 text-base font-bold text-gray-900 dark:text-zinc-100">تفاصيل الدفع</h2>
 
-                @keyframes spin {
-                    to { transform: rotate(360deg); }
-                }
+                    {isElectronicPayment ? (
+                        <div className="space-y-2 rounded-xl border border-amber-200 bg-amber-50 p-3 dark:border-amber-900 dark:bg-amber-950/20">
+                            <p className="text-sm font-semibold text-amber-800 dark:text-amber-200">في انتظار تأكيد الدفع</p>
+                            <p className="text-xs text-amber-700 dark:text-amber-300">حوّل المبلغ على الرقم التالي ثم ارفع الإيصال:</p>
+                            <div className="flex items-center justify-between gap-2 rounded-lg bg-white px-3 py-2 text-sm font-bold text-gray-900 dark:bg-zinc-900 dark:text-zinc-100">
+                                <span>{PAYMENT_NUMBER}</span>
+                                <span>{formatMoney(booking.totalAmount)} ج.م</span>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/20 dark:text-emerald-300">
+                            سيتم الدفع عند الاستلام.
+                        </div>
+                    )}
+                </section>
 
-                .success-icon-container {
-                    display: flex;
-                    justify-content: center;
-                    margin-bottom: 1.5rem;
-                }
+                {showUploadSection ? (
+                    <section className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+                        <h2 className="mb-3 text-base font-bold text-gray-900 dark:text-zinc-100">رفع صورة الإيصال</h2>
 
-                .success-icon {
-                    animation: scaleIn 0.5s ease;
-                }
+                        {previewUrl ? (
+                            <div className="mb-3 overflow-hidden rounded-xl border border-gray-200 dark:border-zinc-700">
+                                <div className="relative h-48 w-full bg-gray-100 dark:bg-zinc-800">
+                                    <Image src={previewUrl} alt="معاينة الإيصال" fill className="object-contain" unoptimized />
+                                </div>
+                            </div>
+                        ) : null}
 
-                @keyframes scaleIn {
-                    from { transform: scale(0); }
-                    to { transform: scale(1); }
-                }
+                        <label className="inline-flex cursor-pointer items-center justify-center rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700">
+                            <input
+                                type="file"
+                                accept="image/*"
+                                onChange={handleReceiptUpload}
+                                disabled={uploadState === 'uploading'}
+                                className="hidden"
+                            />
+                            {uploadState === 'uploading' ? 'جاري الرفع...' : 'اختيار صورة الإيصال'}
+                        </label>
 
-                .page-title {
-                    text-align: center;
-                    font-size: 2rem;
-                    font-weight: bold;
-                    color: white;
-                    margin-bottom: 2rem;
-                }
+                        {uploadState === 'uploading' ? (
+                            <p className="mt-2 text-xs text-blue-600 dark:text-blue-300">جاري رفع الإيصال...</p>
+                        ) : null}
+                        {uploadState === 'done' ? (
+                            <p className="mt-2 text-xs text-emerald-600 dark:text-emerald-300">تم رفع الإيصال بنجاح.</p>
+                        ) : null}
+                        {uploadState === 'error' ? (
+                            <p className="mt-2 text-xs text-red-600 dark:text-red-400">{uploadMessage}</p>
+                        ) : null}
+                    </section>
+                ) : null}
 
-                .info-card {
-                    background: white;
-                    border-radius: 16px;
-                    padding: 2rem;
-                    margin-bottom: 1.5rem;
-                    display: flex;
-                    gap: 1.5rem;
-                    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
-                }
+                <section className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+                    <h2 className="mb-3 text-base font-bold text-gray-900 dark:text-zinc-100">تفاصيل الحجز</h2>
+                    <dl className="space-y-3 text-sm">
+                        <div className="flex items-center justify-between gap-3 border-b border-gray-100 pb-2 dark:border-zinc-800">
+                            <dt className="text-gray-500 dark:text-zinc-400">العقار</dt>
+                            <dd className="font-semibold text-gray-900 dark:text-zinc-100">{booking.property?.title || 'غير محدد'}</dd>
+                        </div>
+                        <div className="flex items-center justify-between gap-3 border-b border-gray-100 pb-2 dark:border-zinc-800">
+                            <dt className="text-gray-500 dark:text-zinc-400">الفترة</dt>
+                            <dd className="font-semibold text-gray-900 dark:text-zinc-100">{formatDate(booking.startDate)} - {formatDate(booking.endDate)}</dd>
+                        </div>
+                        <div className="flex items-center justify-between gap-3 border-b border-gray-100 pb-2 dark:border-zinc-800">
+                            <dt className="text-gray-500 dark:text-zinc-400">طريقة الدفع</dt>
+                            <dd className="font-semibold text-gray-900 dark:text-zinc-100">{booking.paymentMethod === 'cash_on_delivery' ? 'الدفع عند الاستلام' : booking.paymentMethod === 'instapay' ? 'إنستاباي' : 'فودافون كاش'}</dd>
+                        </div>
+                        <div className="flex items-center justify-between gap-3">
+                            <dt className="text-gray-500 dark:text-zinc-400">الإجمالي</dt>
+                            <dd className="text-base font-black text-blue-700 dark:text-blue-300">{formatMoney(booking.totalAmount)} ج.م</dd>
+                        </div>
+                    </dl>
+                </section>
 
-                .info-card.warning {
-                    border: 2px solid #fbbf24;
-                    background: #fef3c7;
-                }
-
-                .info-card.success {
-                    border: 2px solid #22c55e;
-                    background: #dcfce7;
-                }
-
-                .info-icon {
-                    font-size: 3rem;
-                }
-
-                .info-content {
-                    flex: 1;
-                }
-
-                .info-content h3 {
-                    font-size: 1.25rem;
-                    font-weight: 600;
-                    margin-bottom: 0.5rem;
-                }
-
-                .phone-number {
-                    display: flex;
-                    align-items: center;
-                    gap: 1rem;
-                    background: white;
-                    padding: 1rem;
-                    border-radius: 8px;
-                    margin: 1rem 0;
-                    font-size: 1.5rem;
-                    font-weight: bold;
-                    cursor: pointer;
-                }
-
-                .copy-btn {
-                    background: #3b82f6;
-                    color: white;
-                    padding: 0.5rem 1rem;
-                    border-radius: 6px;
-                    border: none;
-                    cursor: pointer;
-                    font-size: 0.875rem;
-                }
-
-                .amount-highlight {
-                    font-size: 2rem;
-                    font-weight: bold;
-                    color: #dc2626;
-                    text-align: center;
-                    margin-top: 1rem;
-                }
-
-                .upload-section {
-                    background: white;
-                    border-radius: 16px;
-                    padding: 2rem;
-                    margin-bottom: 1.5rem;
-                    text-align: center;
-                }
-
-                .upload-section h3 {
-                    margin-bottom: 1rem;
-                    font-size: 1.125rem;
-                    font-weight: 600;
-                }
-
-                .upload-btn {
-                    display: inline-block;
-                    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-                    color: white;
-                    padding: 1rem 2rem;
-                    border-radius: 12px;
-                    cursor: pointer;
-                    font-weight: 600;
-                    transition: transform 0.2s;
-                }
-
-                .upload-btn:hover {
-                    transform: scale(1.05);
-                }
-
-                .success-message {
-                    background: #dcfce7;
-                    color: #166534;
-                    padding: 1rem;
-                    border-radius: 12px;
-                    text-align: center;
-                    margin-bottom: 1.5rem;
-                    font-weight: 600;
-                }
-
-                .booking-details, .owner-contact, .important-notes {
-                    background: white;
-                    border-radius: 16px;
-                    padding: 2rem;
-                    margin-bottom: 1.5rem;
-                }
-
-                .section-title {
-                    font-size: 1.5rem;
-                    font-weight: 600;
-                    margin-bottom: 1.5rem;
-                }
-
-                .details-grid {
-                    display: flex;
-                    flex-direction: column;
-                    gap: 1rem;
-                }
-
-                .detail-row {
-                    display: flex;
-                    justify-content: space-between;
-                    padding-bottom: 1rem;
-                    border-bottom: 1px solid #e5e7eb;
-                }
-
-                .detail-row:last-child {
-                    border-bottom: none;
-                }
-
-                .label {
-                    color: #6b7280;
-                    font-weight: 500;
-                }
-
-                .value {
-                    font-weight: 600;
-                    text-align: left;
-                }
-
-                .value.highlight {
-                    color: #3b82f6;
-                    font-size: 1.25rem;
-                }
-
-                .contact-options {
-                    display: flex;
-                    gap: 1rem;
-                    flex-wrap: wrap;
-                }
-
-                .contact-btn {
-                    flex: 1;
-                    min-width: 200px;
-                    padding: 1rem;
-                    border-radius: 12px;
-                    text-align: center;
-                    text-decoration: none;
-                    font-weight: 600;
-                    transition: transform 0.2s;
-                }
-
-                .contact-btn:hover {
-                    transform: translateY(-2px);
-                }
-
-                .contact-btn.phone {
-                    background: #dbeafe;
-                    color: #1e40af;
-                }
-
-                .contact-btn.whatsapp {
-                    background: #dcfce7;
-                    color: #166534;
-                }
-
-                .notes-list {
-                    display: flex;
-                    flex-direction: column;
-                    gap: 1rem;
-                }
-
-                .note {
-                    display: flex;
-                    align-items: start;
-                    gap: 0.75rem;
-                    padding: 1rem;
-                    background: #f3f4f6;
-                    border-radius: 8px;
-                }
-
-                .note-icon {
-                    font-size: 1.25rem;
-                }
-
-                .action-buttons {
-                    display: flex;
-                    gap: 1rem;
-                    margin-top: 2rem;
-                }
-
-                .btn-primary, .btn-secondary, .btn-home {
-                    flex: 1;
-                    padding: 1rem;
-                    border-radius: 12px;
-                    border: none;
-                    font-size: 1rem;
-                    font-weight: 600;
-                    cursor: pointer;
-                    transition: all 0.2s;
-                }
-
-                .btn-primary {
-                    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-                    color: white;
-                }
-
-                .btn-secondary {
-                    background: white;
-                    color: #3b82f6;
-                    border: 2px solid #3b82f6;
-                }
-
-                .btn-home {
-                    background: white;
-                    color: #667eea;
-                }
-
-                .btn-primary:hover, .btn-secondary:hover, .btn-home:hover {
-                    transform: translateY(-2px);
-                    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
-                }
-
-                @media (max-width: 640px) {
-                    .action-buttons {
-                        flex-direction: column;
-                    }
-
-                    .contact-options {
-                        flex-direction: column;
-                    }
-                }
-            `}</style>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    <button
+                        type="button"
+                        onClick={() => router.push('/bookings')}
+                        className="rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700"
+                    >
+                        عرض حجوزاتي
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => router.push('/')}
+                        className="rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                    >
+                        العودة للرئيسية
+                    </button>
+                </div>
+            </div>
         </div>
     );
 }

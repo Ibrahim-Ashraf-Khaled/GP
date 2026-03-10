@@ -1,15 +1,45 @@
-'use client';
+﻿'use client';
 
 import React from 'react';
-import { RentalType, RentalConfig } from '@/types';
+import { RentalConfig } from '@/types';
 
 interface DateSelectorProps {
     rentalConfig: RentalConfig;
-    startDate: Date | null;
-    endDate: Date | null;
-    onStartDateChange: (date: Date) => void;
-    onEndDateChange: (date: Date) => void;
+    startDate: string;
+    endDate: string;
+    onStartDateChange: (date: string) => void;
+    onEndDateChange: (date: string) => void;
     onMonthsChange?: (months: number) => void;
+    errors?: {
+        startDate?: string;
+        endDate?: string;
+    };
+}
+
+function parseDateOnly(date: string) {
+    if (!date) return null;
+    return new Date(`${date}T00:00:00.000Z`);
+}
+
+function formatDateOnly(date: Date) {
+    const year = date.getUTCFullYear();
+    const month = `${date.getUTCMonth() + 1}`.padStart(2, '0');
+    const day = `${date.getUTCDate()}`.padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
+function getDailyDurationText(days: number) {
+    if (days === 1) return 'ليلة واحدة';
+    if (days === 2) return 'ليلتان';
+    if (days >= 3 && days <= 10) return `${days} ليالي`;
+    return `${days} ليلة`;
+}
+
+function getMonthlyDurationText(months: number) {
+    if (months === 1) return 'شهر واحد';
+    if (months === 2) return 'شهران';
+    if (months >= 3 && months <= 10) return `${months} أشهر`;
+    return `${months} شهر`;
 }
 
 export default function DateSelector({
@@ -18,305 +48,211 @@ export default function DateSelector({
     endDate,
     onStartDateChange,
     onEndDateChange,
-    onMonthsChange
+    onMonthsChange,
+    errors,
 }: DateSelectorProps) {
     const { type, minDuration, maxDuration, seasonalConfig } = rentalConfig;
 
-    const formatDate = (date: Date | null) => {
-        if (!date) return '';
-        return date.toISOString().split('T')[0];
+    const getTypeHelper = () => {
+        if (type === 'daily') return 'الإيجار اليومي يحسب بعدد الليالي.';
+        if (type === 'monthly') return 'الإيجار الشهري يحسب بالشهور الكاملة.';
+        return 'الإيجار الموسمي يغطي فترة دراسية كاملة.';
+    };
+
+    const getMinStartDate = () => formatDateOnly(new Date());
+
+    const getMinEndDate = () => {
+        if (!startDate) return getMinStartDate();
+
+        const minEnd = parseDateOnly(startDate);
+        if (!minEnd) return getMinStartDate();
+
+        if (type === 'daily') {
+            minEnd.setUTCDate(minEnd.getUTCDate() + (minDuration || 1));
+        } else if (type === 'monthly') {
+            minEnd.setUTCMonth(minEnd.getUTCMonth() + (minDuration || 1));
+        }
+
+        return formatDateOnly(minEnd);
     };
 
     const handleStartDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const date = new Date(e.target.value);
+        const date = e.target.value;
+        if (!date) return;
+
         onStartDateChange(date);
+
+        if (endDate && date > endDate) {
+            onEndDateChange(date);
+        }
     };
 
     const handleEndDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const date = new Date(e.target.value);
+        const date = e.target.value;
+        if (!date) return;
         onEndDateChange(date);
     };
 
     const handleMonthsChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-        const months = parseInt(e.target.value);
-        if (onMonthsChange) {
-            onMonthsChange(months);
-        }
+        const months = Number.parseInt(e.target.value, 10);
+        if (!Number.isFinite(months)) return;
 
-        if (startDate) {
-            const end = new Date(startDate);
-            end.setMonth(end.getMonth() + months);
-            onEndDateChange(end);
-        }
+        onMonthsChange?.(months);
+
+        if (!startDate) return;
+
+        const start = parseDateOnly(startDate);
+        if (!start) return;
+
+        const end = new Date(start);
+        end.setUTCMonth(end.getUTCMonth() + months);
+        onEndDateChange(formatDateOnly(end));
     };
 
-    // الحصول على الحد الأدنى لتاريخ البداية (اليوم)
-    const getMinStartDate = () => {
-        const today = new Date();
-        return formatDate(today);
-    };
+    const startDateObj = parseDateOnly(startDate);
+    const endDateObj = parseDateOnly(endDate);
 
-    // الحصول على الحد الأدنى لتاريخ النهاية
-    const getMinEndDate = () => {
-        if (!startDate) return getMinStartDate();
-        const minEnd = new Date(startDate);
+    const daysDiff = startDateObj && endDateObj
+        ? Math.max(0, Math.ceil((endDateObj.getTime() - startDateObj.getTime()) / (1000 * 60 * 60 * 24)))
+        : 0;
 
-        if (type === 'daily') {
-            minEnd.setDate(minEnd.getDate() + minDuration);
-        } else if (type === 'monthly') {
-            minEnd.setMonth(minEnd.getMonth() + minDuration);
-        }
+    const monthsDiff = startDateObj && endDateObj
+        ? Math.max(0, (endDateObj.getUTCFullYear() - startDateObj.getUTCFullYear()) * 12 + (endDateObj.getUTCMonth() - startDateObj.getUTCMonth()))
+        : 0;
 
-        return formatDate(minEnd);
-    };
+    const baseInputClasses = 'w-full rounded-xl border bg-white px-3 py-2.5 text-sm text-gray-900 transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:cursor-not-allowed disabled:bg-gray-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:disabled:bg-zinc-800';
+    const labelClasses = 'mb-1 block text-sm font-semibold text-gray-700 dark:text-zinc-200';
+    const hintClasses = 'text-xs text-gray-500 dark:text-zinc-400';
+    const errorClasses = 'mt-1 text-xs text-red-600 dark:text-red-400';
+    const fieldContainer = 'space-y-1';
+    const sectionClasses = 'rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900';
 
-    // عرض محدد التاريخ للإيجار اليومي
     if (type === 'daily') {
         return (
-            <div className="date-selector">
-                <h3 className="text-lg font-semibold mb-4">اختر مواعيد الإقامة</h3>
+            <div className={sectionClasses}>
+                <h3 className="mb-1 text-base font-bold text-gray-900 dark:text-zinc-100">اختر مواعيد الإقامة</h3>
+                <p className="mb-4 text-sm text-gray-500 dark:text-zinc-400">{getTypeHelper()}</p>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="form-group">
-                        <label className="form-label">تاريخ الوصول</label>
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <div className={fieldContainer}>
+                        <label className={labelClasses} htmlFor="booking-start-date">تاريخ الوصول</label>
                         <input
+                            id="booking-start-date"
                             type="date"
-                            value={formatDate(startDate)}
+                            value={startDate}
                             onChange={handleStartDateChange}
                             min={getMinStartDate()}
-                            className="form-input"
+                            className={baseInputClasses}
                             required
                         />
+                        {errors?.startDate ? <p className={errorClasses}>{errors.startDate}</p> : null}
                     </div>
 
-                    <div className="form-group">
-                        <label className="form-label">تاريخ المغادرة</label>
+                    <div className={fieldContainer}>
+                        <label className={labelClasses} htmlFor="booking-end-date">تاريخ المغادرة</label>
                         <input
+                            id="booking-end-date"
                             type="date"
-                            value={formatDate(endDate)}
+                            value={endDate}
                             onChange={handleEndDateChange}
                             min={getMinEndDate()}
-                            className="form-input"
+                            className={baseInputClasses}
                             required
                             disabled={!startDate}
                         />
+                        {errors?.endDate ? <p className={errorClasses}>{errors.endDate}</p> : null}
                     </div>
                 </div>
 
-                {startDate && endDate && (
-                    <div className="duration-info">
-                        <span className="info-icon">📅</span>
-                        <span>
-                            عدد الليالي: {Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))}
-                        </span>
+                {startDate && endDate && daysDiff > 0 && (
+                    <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm font-semibold text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300">
+                        المدة: {getDailyDurationText(daysDiff)}
                     </div>
                 )}
-
-                <style jsx>{`
-                    ${sharedStyles}
-                `}</style>
             </div>
         );
     }
 
-    // عرض محدد التاريخ للإيجار الشهري
     if (type === 'monthly') {
         return (
-            <div className="date-selector">
-                <h3 className="text-lg font-semibold mb-4">اختر فترة الإيجار</h3>
+            <div className={sectionClasses}>
+                <h3 className="mb-1 text-base font-bold text-gray-900 dark:text-zinc-100">اختر فترة الإيجار</h3>
+                <p className="mb-4 text-sm text-gray-500 dark:text-zinc-400">{getTypeHelper()}</p>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="form-group">
-                        <label className="form-label">تاريخ البداية</label>
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <div className={fieldContainer}>
+                        <label className={labelClasses} htmlFor="booking-start-date">تاريخ البداية</label>
                         <input
+                            id="booking-start-date"
                             type="date"
-                            value={formatDate(startDate)}
+                            value={startDate}
                             onChange={handleStartDateChange}
                             min={getMinStartDate()}
-                            className="form-input"
+                            className={baseInputClasses}
                             required
                         />
+                        {errors?.startDate ? <p className={errorClasses}>{errors.startDate}</p> : null}
                     </div>
 
-                    <div className="form-group">
-                        <label className="form-label">عدد الأشهر</label>
+                    <div className={fieldContainer}>
+                        <label className={labelClasses} htmlFor="booking-months">عدد الأشهر</label>
                         <select
+                            id="booking-months"
                             onChange={handleMonthsChange}
-                            className="form-input"
+                            className={baseInputClasses}
                             required
                             disabled={!startDate}
+                            defaultValue=""
                         >
                             <option value="">اختر المدة</option>
-                            {Array.from({ length: maxDuration - minDuration + 1 }, (_, i) => minDuration + i).map(months => (
+                            {Array.from({ length: maxDuration - minDuration + 1 }, (_, i) => minDuration + i).map((months) => (
                                 <option key={months} value={months}>
-                                    {months} {months === 1 ? 'شهر' : months === 2 ? 'شهران' : 'أشهر'}
+                                    {getMonthlyDurationText(months)}
                                 </option>
                             ))}
                         </select>
+                        <p className={hintClasses}>سيتم ضبط تاريخ النهاية تلقائيا.</p>
+                        {errors?.endDate ? <p className={errorClasses}>{errors.endDate}</p> : null}
                     </div>
                 </div>
 
                 {endDate && (
-                    <div className="duration-info">
-                        <span className="info-icon">📅</span>
-                        <span>
-                            الإيجار حتى: {endDate.toLocaleDateString('ar-EG', { year: 'numeric', month: 'long', day: 'numeric' })}
-                        </span>
+                    <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm font-semibold text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300">
+                        المدة: {getMonthlyDurationText(monthsDiff || minDuration)}
                     </div>
                 )}
-
-                <style jsx>{`
-                    ${sharedStyles}
-                `}</style>
             </div>
         );
     }
 
-    // عرض محدد التاريخ للإيجار الموسمي
     if (type === 'seasonal') {
-        const startMonth = seasonalConfig?.startMonth || 9; // سبتمبر
-        const endMonth = seasonalConfig?.endMonth || 6; // يونيو
-
         return (
-            <div className="date-selector">
-                <h3 className="text-lg font-semibold mb-4">الفترة الدراسية</h3>
+            <div className={sectionClasses}>
+                <h3 className="mb-1 text-base font-bold text-gray-900 dark:text-zinc-100">الفترة الدراسية</h3>
+                <p className="mb-4 text-sm text-gray-500 dark:text-zinc-400">{getTypeHelper()}</p>
 
-                <div className="seasonal-info">
-                    <div className="info-card">
-                        <span className="info-icon">🎓</span>
+                <div className="space-y-3">
+                    <div className="flex items-start gap-3 rounded-xl border border-blue-200 bg-blue-50 p-3 dark:border-blue-900 dark:bg-blue-950/30">
+                        <span className="material-symbols-outlined text-blue-600 dark:text-blue-300">school</span>
                         <div>
-                            <h4 className="font-semibold">إيجار الفترة الدراسية الكاملة</h4>
-                            <p className="text-sm text-gray-600 mt-1">
-                                من سبتمبر إلى يونيو (10 أشهر)
-                            </p>
+                            <h4 className="font-semibold text-gray-900 dark:text-zinc-100">إيجار الفترة الدراسية الكاملة</h4>
+                            <p className="mt-1 text-sm text-gray-600 dark:text-zinc-300">من سبتمبر إلى يونيو (10 أشهر)</p>
                         </div>
                     </div>
 
-                    {seasonalConfig?.requiresDeposit && (
-                        <div className="deposit-notice">
-                            <span className="warning-icon">⚠️</span>
+                    {seasonalConfig?.requiresDeposit ? (
+                        <div className="flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 p-3 dark:border-amber-900 dark:bg-amber-950/30">
+                            <span className="material-symbols-outlined text-amber-700 dark:text-amber-300">gpp_good</span>
                             <div>
-                                <h4 className="font-semibold text-amber-700">تأمين مطلوب</h4>
-                                <p className="text-sm text-gray-600 mt-1">
-                                    سيتم استرداد التأمين عند نهاية الفترة وتسليم العقار
-                                </p>
+                                <h4 className="font-semibold text-amber-800 dark:text-amber-200">تأمين مطلوب</h4>
+                                <p className="mt-1 text-sm text-amber-700/90 dark:text-amber-300">سيتم استرداد التأمين عند نهاية الفترة وتسليم العقار.</p>
                             </div>
                         </div>
-                    )}
+                    ) : null}
                 </div>
-
-                <style jsx>{`
-                    ${sharedStyles}
-                    
-                    .seasonal-info {
-                        display: flex;
-                        flex-direction: column;
-                        gap: 1rem;
-                    }
-
-                    .info-card {
-                        display: flex;
-                        gap: 1rem;
-                        align-items: start;
-                        padding: 1rem;
-                        background: #dbeafe;
-                        border-radius: 8px;
-                        border: 1px solid #93c5fd;
-                    }
-
-                    .deposit-notice {
-                        display: flex;
-                        gap: 1rem;
-                        align-items: start;
-                        padding: 1rem;
-                        background: #fef3c7;
-                        border-radius: 8px;
-                        border: 1px solid #fcd34d;
-                    }
-
-                    .warning-icon {
-                        font-size: 1.5rem;
-                    }
-                `}</style>
             </div>
         );
     }
 
     return null;
 }
-
-// الأنماط المشتركة
-const sharedStyles = `
-    .date-selector {
-        background: rgba(255, 255, 255, 0.7);
-        backdrop-filter: blur(10px);
-        border: 1px solid rgba(255, 255, 255, 0.4);
-        border-radius: 20px;
-        padding: 2rem;
-        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05);
-    }
-
-    .form-group {
-        display: flex;
-        flex-direction: column;
-        gap: 0.5rem;
-    }
-
-    .form-label {
-        font-weight: 700;
-        font-size: 0.9rem;
-        color: #374151;
-        text-align: right;
-        margin-right: 0.25rem;
-    }
-
-    .form-input {
-        width: 100%;
-        padding: 0.875rem 1.25rem;
-        background: rgba(255, 255, 255, 0.5);
-        border: 1px solid rgba(209, 213, 219, 0.5);
-        border-radius: 12px;
-        font-size: 1rem;
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        text-align: right;
-        direction: rtl;
-        color: #111827;
-    }
-
-    .form-input:focus {
-        outline: none;
-        background: white;
-        border-color: #2563eb;
-        box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1);
-        transform: translateY(-1px);
-    }
-
-    .form-input:hover:not(:disabled) {
-        border-color: #9ca3af;
-        background: rgba(255, 255, 255, 0.8);
-    }
-
-    .form-input:disabled {
-        background: rgba(243, 244, 246, 0.5);
-        cursor: not-allowed;
-        color: #9ca3af;
-    }
-
-    .duration-info {
-        margin-top: 1.5rem;
-        padding: 1rem 1.5rem;
-        background: rgba(236, 253, 245, 0.6);
-        backdrop-filter: blur(4px);
-        border-radius: 12px;
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
-        border: 1px solid rgba(167, 243, 208, 0.5);
-        color: #065f46;
-        font-weight: 600;
-    }
-
-    .info-icon {
-        font-size: 1.25rem;
-    }
-`;

@@ -5,12 +5,16 @@ import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
 import { GlassCard, GlassInput, GlassButton } from '@/components/ui/glass';
 
+/**
+ * @deprecated PR0: This legacy form is not used by app routes.
+ * Keep temporarily for compatibility/tests and remove in PR7 after usage cleanup.
+ */
 export default function AuthForm() {
     const [isLogin, setIsLogin] = useState(true);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState<string | null>(null);
-    const { signIn, signUp } = useAuth();
+    const { login, register } = useAuth();
     const router = useRouter();
 
     const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -23,23 +27,26 @@ export default function AuthForm() {
         const email = formData.get('email') as string;
         const password = formData.get('password') as string;
         const fullName = formData.get('full_name') as string;
+        const phone = formData.get('phone') as string;
 
         try {
             if (isLogin) {
-                const { error: signInError } = await signIn(email, password);
-                if (signInError) {
-                    setError(
-                        signInError.message === 'Invalid login credentials'
-                            ? 'بيانات الدخول غير صحيحة'
-                            : signInError.message
-                    );
+                const success = await login(email, password);
+                if (!success) {
+                    setError('بيانات الدخول غير صحيحة');
                     return;
                 }
                 router.push('/');
             } else {
-                const { error: signUpError } = await signUp(email, password, fullName);
-                if (signUpError) {
-                    setError(signUpError.message);
+                const success = await register({
+                    email,
+                    password,
+                    name: fullName,
+                    phone,
+                    role: 'tenant',
+                });
+                if (!success) {
+                    setError('فشل إنشاء الحساب');
                     return;
                 }
                 setSuccess('تم إنشاء حسابك بنجاح! يرجى تأكيد بريدك الإلكتروني.');
@@ -70,14 +77,25 @@ export default function AuthForm() {
 
             <form onSubmit={handleSubmit} className="space-y-4">
                 {!isLogin && (
-                    <GlassInput
-                        label="الاسم الكامل"
-                        name="full_name"
-                        type="text"
-                        required
-                        placeholder="أحمد محمد"
-                        icon={<span className="material-symbols-outlined text-gray-400">person</span>}
-                    />
+                    <>
+                        <GlassInput
+                            label="الاسم الكامل"
+                            name="full_name"
+                            type="text"
+                            required
+                            placeholder="أحمد محمد"
+                            icon={<span className="material-symbols-outlined text-gray-400">person</span>}
+                        />
+                        <GlassInput
+                            label="رقم الهاتف"
+                            name="phone"
+                            type="tel"
+                            required
+                            placeholder="01xxxxxxxxx"
+                            dir="ltr"
+                            icon={<span className="material-symbols-outlined text-gray-400">phone</span>}
+                        />
+                    </>
                 )}
 
                 <GlassInput
@@ -88,6 +106,7 @@ export default function AuthForm() {
                     placeholder="example@mail.com"
                     dir="ltr"
                     icon={<span className="material-symbols-outlined text-gray-400">mail</span>}
+                    data-testid="auth-email"
                 />
 
                 <GlassInput
@@ -98,6 +117,7 @@ export default function AuthForm() {
                     placeholder="••••••••"
                     dir="ltr"
                     icon={<span className="material-symbols-outlined text-gray-400">lock</span>}
+                    data-testid="auth-password"
                 />
 
                 {error && (
@@ -119,6 +139,7 @@ export default function AuthForm() {
                     loading={loading}
                     disabled={loading}
                     className="mt-6"
+                    data-testid="auth-submit"
                 >
                     {loading ? 'جاري المعالجة...' : isLogin ? 'تسجيل الدخول' : 'إنشاء الحساب'}
                 </GlassButton>

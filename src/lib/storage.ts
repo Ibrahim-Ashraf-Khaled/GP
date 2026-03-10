@@ -1,5 +1,10 @@
 import { Property, User, PaymentRequest, Review, Notification } from '@/types';
+import { fromPropertyRow, toPropertyInsert } from './propertyMapper';
+import type { PropertyRowCompat } from './propertyMapper';
 import { supabase, STORAGE_BUCKET } from './supabase';
+
+type PropertyRowWithLegacyLocation = PropertyRowCompat;
+type PropertyInsertPayload = ReturnType<typeof toPropertyInsert>;
 
 // مفاتيح التخزين
 const STORAGE_KEYS = {
@@ -66,61 +71,65 @@ export async function uploadImage(file: File): Promise<string> {
     }
 }
 
+export async function uploadPropertyImages(files: File[]): Promise<string[]> {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user?.id) {
+        throw new Error('يجب تسجيل الدخول لرفع الصور');
+    }
+
+    const uploadedUrls: string[] = [];
+
+    for (const file of files) {
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${user.id}/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
+
+        const { error: uploadError } = await supabase.storage
+            .from(STORAGE_BUCKET)
+            .upload(fileName, file);
+
+        if (uploadError) {
+            throw new Error(`فشل رفع الصورة: ${uploadError.message}`);
+        }
+
+        const { data } = supabase.storage
+            .from(STORAGE_BUCKET)
+            .getPublicUrl(fileName);
+
+        uploadedUrls.push(data.publicUrl);
+    }
+
+    return uploadedUrls;
+}
+
+export async function deletePropertyImages(urls: string[]): Promise<void> {
+    const pathsToDelete = urls.map(url => {
+        const parts = url.split('/');
+        return parts.slice(-2).join('/');
+    }).filter(path => path);
+
+    if (pathsToDelete.length === 0) {
+        return;
+    }
+
+    const { error } = await supabase.storage
+        .from(STORAGE_BUCKET)
+        .remove(pathsToDelete);
+
+    if (error) {
+        console.error('Error deleting images:', error);
+    }
+}
+
 // ====== دوال Mapping بين DB و App ======
 
 // تحويل Property من DB format إلى App format
-function convertPropertyFromDB(dbProperty: any): Property {
-    return {
-        id: dbProperty.id,
-        title: dbProperty.title,
-        description: dbProperty.description,
-        price: parseFloat(dbProperty.price),
-        priceUnit: dbProperty.price_unit,
-        category: dbProperty.category,
-        status: dbProperty.status,
-        images: dbProperty.images || [],
-        location: dbProperty.location,
-        ownerPhone: dbProperty.owner_phone,
-        ownerId: dbProperty.owner_id,
-        ownerName: dbProperty.owner_name,
-        features: dbProperty.features || [],
-        bedrooms: dbProperty.bedrooms,
-        bathrooms: dbProperty.bathrooms,
-        area: dbProperty.floor_area,
-        floor: dbProperty.floor_number,
-        isVerified: dbProperty.is_verified,
-        viewsCount: dbProperty.views_count || 0,
-        createdAt: dbProperty.created_at,
-        updatedAt: dbProperty.updated_at,
-        rentalConfig: dbProperty.rental_config,
-        availableDates: dbProperty.available_dates,
-    };
+function convertPropertyFromDB(dbProperty: PropertyRowWithLegacyLocation): Property {
+    return fromPropertyRow(dbProperty);
 }
 
 // تحويل Property من App format إلى DB format
-function convertPropertyToDB(appProperty: Partial<Property>): any {
-    return {
-        title: appProperty.title,
-        description: appProperty.description,
-        price: appProperty.price,
-        price_unit: appProperty.priceUnit,
-        category: appProperty.category,
-        status: appProperty.status,
-        images: appProperty.images || [],
-        location: appProperty.location,
-        owner_phone: appProperty.ownerPhone,
-        owner_id: appProperty.ownerId,
-        owner_name: appProperty.ownerName,
-        features: appProperty.features || [],
-        bedrooms: appProperty.bedrooms,
-        bathrooms: appProperty.bathrooms,
-        floor_area: appProperty.area,
-        floor_number: appProperty.floor,
-        is_verified: appProperty.isVerified || false,
-        views_count: appProperty.viewsCount || 0,
-        rental_config: appProperty.rentalConfig,
-        available_dates: appProperty.availableDates,
-    };
+function convertPropertyToDB(appProperty: Partial<Property>): PropertyInsertPayload {
+    return toPropertyInsert(appProperty);
 }
 
 // دالة للحصول على العقارات من Supabase
@@ -492,7 +501,7 @@ const mockProperties: Property[] = [
         priceUnit: 'day',
         category: 'apartment',
         status: 'available',
-        images: ['/images/property1.jpg'],
+        images: ['/images/property1.png'],
         location: {
             lat: 31.4431,
             lng: 31.5344,

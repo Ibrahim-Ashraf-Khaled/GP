@@ -81,7 +81,7 @@ export function PropertyCard({
     const imageSrc = image && image.trim() !== "" ? image : "/images/placeholder.jpg";
 
     return (
-        <div className="bg-surface-light dark:bg-surface-dark rounded-2xl p-3 shadow-sm border border-border-light dark:border-border-dark hover:shadow-md transition-shadow">
+        <div className="group bg-surface-light dark:bg-surface-dark rounded-2xl p-3 shadow-sm border border-border-light dark:border-border-dark transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:border-primary/20">
             <div className="relative w-full h-48 rounded-xl overflow-hidden mb-3 group/image">
                 <Link href={`/property/${id}`} className="block w-full h-full">
                     <Image
@@ -182,13 +182,12 @@ export function PropertyCard({
                     )}
                 </div>
 
-                {/* Action Button */}
                 <Link
                     href={`/property/${id}`}
                     className="w-full mt-1 bg-primary hover:bg-primary/90 text-white font-bold py-3 rounded-xl transition-colors flex items-center justify-center gap-2"
                 >
                     عرض التفاصيل
-                    <span className="material-symbols-outlined text-[18px] rtl:rotate-180">
+                    <span className="material-symbols-outlined text-[18px] rtl:rotate-180 transition-transform duration-300 group-hover:-translate-x-1">
                         arrow_right_alt
                     </span>
                 </Link>

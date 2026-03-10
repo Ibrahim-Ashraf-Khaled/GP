@@ -4,13 +4,16 @@ import { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
 
-export default function SignUpForm({ onSwitchToLogin }: { onSwitchToLogin: () => void }) {
+type SocialProvider = 'google' | 'facebook' | 'apple';
+
+export default function SignUpForm({ onSwitchToLogin, redirectUrl }: { onSwitchToLogin: () => void; redirectUrl?: string }) {
     const [role, setRole] = useState<'tenant' | 'landlord'>('tenant');
     const [loading, setLoading] = useState(false);
+    const [socialLoading, setSocialLoading] = useState<SocialProvider | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [showPassword, setShowPassword] = useState(false);
     const [agreedToTerms, setAgreedToTerms] = useState(false);
-    const { signUp, signInWithGoogle, signInWithFacebook } = useAuth();
+    const { register, signInWithProvider } = useAuth();
     const router = useRouter();
 
     const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -31,15 +34,18 @@ export default function SignUpForm({ onSwitchToLogin }: { onSwitchToLogin: () =>
         const password = formData.get('password') as string;
 
         try {
-            const { error: signUpError } = await signUp(email, password, fullName, phone, role);
-            if (signUpError) {
-                setError(signUpError.message);
+            const success = await register({
+                name: fullName,
+                email,
+                phone,
+                password,
+                role,
+            });
+            if (!success) {
+                setError('فشل إنشاء الحساب. إذا كان البريد مسجلًا بالفعل استخدم تسجيل الدخول.');
                 return;
             }
-            // If signup successful, we can optionally redirect or show success
-            // For Supabase, usually you are logged in or allow email confirmation.
-            // We'll redirect to home.
-            router.push('/');
+            router.replace(redirectUrl || '/');
         } catch (err) {
             setError('حدث خطأ غير متوقع');
             console.error(err);
@@ -48,226 +54,225 @@ export default function SignUpForm({ onSwitchToLogin }: { onSwitchToLogin: () =>
         }
     };
 
+    const handleSocialLogin = async (provider: SocialProvider) => {
+        setError(null);
+        setSocialLoading(provider);
+
+        const result = await signInWithProvider(provider, redirectUrl);
+        if (!result.success) {
+            setError(result.error || 'تعذر بدء تسجيل الدخول الاجتماعي');
+            setSocialLoading(null);
+        }
+    };
+
     return (
-        <div className="flex-1 overflow-y-auto no-scrollbar pb-8">
-            {/* Header */}
-            <div className="sticky top-0 z-20 flex items-center bg-background-light dark:bg-background-dark p-4 pb-2 justify-between border-b border-transparent backdrop-blur-sm bg-opacity-90 dark:bg-opacity-90">
+        <div className="flex flex-col">
+            <header className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-border-light/70 dark:border-border-dark/70">
                 <button
-                    onClick={() => router.back()}
-                    className="text-slate-900 dark:text-white flex size-10 shrink-0 items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                    onClick={onSwitchToLogin}
+                    className="group flex size-10 items-center justify-center rounded-full text-text-main dark:text-white transition-all hover:bg-black/5 dark:hover:bg-white/10 hover:scale-105"
+                    aria-label="العودة لتسجيل الدخول"
+                    type="button"
                 >
-                    <span className="material-symbols-outlined text-[24px]">arrow_forward</span>
+                    <span className="material-symbols-outlined text-[22px] transition-transform group-hover:translate-x-0.5">
+                        arrow_forward
+                    </span>
                 </button>
-                <h2 className="text-slate-900 dark:text-white text-lg font-bold leading-tight flex-1 text-center pe-10">
-                    إنشاء حساب جديد
-                </h2>
-            </div>
 
-            {/* Headline */}
-            <div className="px-6 pt-6 pb-2">
-                <h1 className="text-slate-900 dark:text-white text-[28px] font-bold leading-tight text-center mb-2">
-                    مرحبًا بك في جمصة للإيجار
-                </h1>
-                <p className="text-slate-500 dark:text-slate-400 text-center text-sm font-medium">
-                    سجل بياناتك للبدء في رحلتك العقارية
-                </p>
-            </div>
+                <h2 className="text-lg font-bold text-text-main dark:text-white">إنشاء حساب جديد</h2>
+                <div className="size-10" />
+            </header>
 
-            {/* Role Selection */}
-            <div className="px-6 py-6">
-                <div className="relative flex h-12 w-full items-center justify-center rounded-xl bg-slate-200 dark:bg-slate-800 p-1">
-                    <label className="relative z-10 flex cursor-pointer h-full flex-1 items-center justify-center rounded-lg text-sm font-bold transition-all duration-200 ease-in-out has-[:checked]:text-primary dark:has-[:checked]:text-white has-[:checked]:shadow-sm">
-                        <span className="truncate z-20">مستأجر</span>
-                        <input
-                            checked={role === 'tenant'}
-                            onChange={() => setRole('tenant')}
-                            className="peer invisible absolute w-0 h-0"
-                            name="role"
-                            type="radio"
-                            value="tenant"
-                        />
-                        <div className="absolute inset-0 z-10 bg-white dark:bg-primary rounded-lg shadow-sm opacity-0 peer-checked:opacity-100 transition-all duration-200 transform peer-checked:scale-100 scale-95"></div>
-                    </label>
-                    <label className="relative z-10 flex cursor-pointer h-full flex-1 items-center justify-center rounded-lg text-sm font-bold transition-all duration-200 ease-in-out has-[:checked]:text-primary dark:has-[:checked]:text-white has-[:checked]:shadow-sm">
-                        <span className="truncate z-20">مؤجر</span>
-                        <input
-                            checked={role === 'landlord'}
-                            onChange={() => setRole('landlord')}
-                            className="peer invisible absolute w-0 h-0"
-                            name="role"
-                            type="radio"
-                            value="landlord"
-                        />
-                        <div className="absolute inset-0 z-10 bg-white dark:bg-primary rounded-lg shadow-sm opacity-0 peer-checked:opacity-100 transition-all duration-200 transform peer-checked:scale-100 scale-95"></div>
-                    </label>
-                </div>
-            </div>
-
-            {/* Form */}
-            <form onSubmit={handleSubmit} className="flex flex-col gap-5 px-6">
-                {/* Name Field */}
-                <div className="flex flex-col gap-2">
-                    <label className="text-slate-900 dark:text-white text-base font-semibold" htmlFor="fullname">
-                        الاسم بالكامل
-                    </label>
-                    <div className="relative">
-                        <input
-                            className="w-full h-14 rounded-xl border border-slate-200 dark:border-slate-700 bg-surface-light dark:bg-surface-dark px-4 text-base font-medium text-slate-900 dark:text-white placeholder:text-slate-400 focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none transition-all"
-                            id="fullname"
-                            name="fullname"
-                            placeholder="أدخل اسمك الثلاثي"
-                            type="text"
-                            required
-                        />
-                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 material-symbols-outlined pointer-events-none">
-                            person
-                        </span>
-                    </div>
+            <main className="px-5 py-6 sm:px-6">
+                <div className="mb-6 text-right">
+                    <h1 className="text-3xl font-bold text-text-main dark:text-white leading-tight">مرحبًا بك في عقارات جمصة</h1>
+                    <p className="mt-2 text-sm leading-relaxed text-text-muted dark:text-gray-400">
+                        سجّل بياناتك الأساسية للبدء في رحلتك العقارية.
+                    </p>
                 </div>
 
-                {/* Phone Field */}
-                <div className="flex flex-col gap-2">
-                    <label className="text-slate-900 dark:text-white text-base font-semibold" htmlFor="phone">
-                        رقم الهاتف
-                    </label>
-                    <div className="flex w-full items-stretch rounded-xl h-14 overflow-hidden border border-slate-200 dark:border-slate-700 focus-within:border-primary focus-within:ring-1 focus-within:ring-primary bg-surface-light dark:bg-surface-dark transition-all">
-                        <div className="flex items-center justify-center bg-slate-50 dark:bg-slate-800/50 border-e border-slate-200 dark:border-slate-700 px-3 min-w-[70px]">
-                            <span className="text-slate-600 dark:text-slate-300 font-bold ltr" dir="ltr">+20</span>
-                        </div>
-                        <input
-                            className="flex-1 h-full border-none bg-transparent px-4 text-base font-medium text-slate-900 dark:text-white placeholder:text-slate-400 focus:ring-0"
-                            id="phone"
-                            name="phone"
-                            placeholder="1xxxxxxxxx"
-                            type="tel"
-                            required
-                        />
-                        <div className="flex items-center justify-center px-4 text-slate-400 pointer-events-none">
-                            <span className="material-symbols-outlined">smartphone</span>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Email Field */}
-                <div className="flex flex-col gap-2">
-                    <label className="text-slate-900 dark:text-white text-base font-semibold" htmlFor="email">
-                        البريد الإلكتروني <span className="text-slate-400 text-sm font-normal">(اختياري)</span>
-                    </label>
-                    <div className="relative">
-                        <input
-                            className="w-full h-14 rounded-xl border border-slate-200 dark:border-slate-700 bg-surface-light dark:bg-surface-dark px-4 text-base font-medium text-slate-900 dark:text-white placeholder:text-slate-400 focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none transition-all"
-                            id="email"
-                            name="email"
-                            placeholder="example@mail.com"
-                            type="email"
-                        />
-                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 material-symbols-outlined pointer-events-none">
-                            mail
-                        </span>
-                    </div>
-                </div>
-
-                {/* Password Field */}
-                <div className="flex flex-col gap-2">
-                    <label className="text-slate-900 dark:text-white text-base font-semibold" htmlFor="password">
-                        كلمة المرور
-                    </label>
-                    <div className="relative group">
-                        <input
-                            className="w-full h-14 rounded-xl border border-slate-200 dark:border-slate-700 bg-surface-light dark:bg-surface-dark px-4 pe-12 text-base font-medium text-slate-900 dark:text-white placeholder:text-slate-400 focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none transition-all"
-                            id="password"
-                            name="password"
-                            placeholder="********"
-                            type={showPassword ? 'text' : 'password'}
-                            required
-                        />
+                <div className="mb-5">
+                    <p className="mb-2 text-sm font-semibold text-text-main dark:text-gray-200">نوع الحساب</p>
+                    <div className="grid grid-cols-2 gap-2 rounded-xl bg-slate-100 dark:bg-slate-800 p-1">
                         <button
-                            onClick={() => setShowPassword(!showPassword)}
-                            className="absolute left-0 top-0 h-full w-12 flex items-center justify-center text-slate-400 hover:text-primary transition-colors focus:outline-none"
                             type="button"
+                            className={`h-10 rounded-lg text-sm font-bold transition-all ${role === 'tenant'
+                                ? 'bg-white dark:bg-primary text-primary dark:text-white shadow'
+                                : 'text-slate-600 dark:text-slate-300'
+                                }`}
+                            onClick={() => setRole('tenant')}
                         >
-                            <span className="material-symbols-outlined">
-                                {showPassword ? 'visibility_off' : 'visibility'}
-                            </span>
+                            مستأجر
+                        </button>
+                        <button
+                            type="button"
+                            className={`h-10 rounded-lg text-sm font-bold transition-all ${role === 'landlord'
+                                ? 'bg-white dark:bg-primary text-primary dark:text-white shadow'
+                                : 'text-slate-600 dark:text-slate-300'
+                                }`}
+                            onClick={() => setRole('landlord')}
+                        >
+                            مؤجر
                         </button>
                     </div>
                 </div>
 
-                {/* Terms Checkbox */}
-                <div className="flex items-start gap-3 mt-2">
-                    <div className="relative flex items-center">
+                <form onSubmit={handleSubmit} className="space-y-4">
+                    <div className="space-y-2">
+                        <label className="block text-sm font-semibold text-text-main dark:text-gray-200" htmlFor="fullname">
+                            الاسم بالكامل
+                        </label>
                         <input
+                            id="fullname"
+                            name="fullname"
+                            type="text"
+                            autoComplete="name"
+                            placeholder="أدخل اسمك الثلاثي"
+                            className="w-full h-12 rounded-xl border border-border-light dark:border-border-dark bg-white dark:bg-surface-dark/80 px-4 text-right text-base text-text-main dark:text-white placeholder:text-text-muted/60 dark:placeholder:text-gray-400/60 outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/20"
+                            required
+                        />
+                    </div>
+
+                    <div className="space-y-2">
+                        <label className="block text-sm font-semibold text-text-main dark:text-gray-200" htmlFor="phone">
+                            رقم الهاتف
+                        </label>
+                        <div className="flex h-12 overflow-hidden rounded-xl border border-border-light dark:border-border-dark focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20">
+                            <div className="flex items-center bg-slate-50 dark:bg-slate-800/50 px-3 text-sm font-bold text-slate-600 dark:text-slate-300">
+                                +20
+                            </div>
+                            <input
+                                id="phone"
+                                name="phone"
+                                type="tel"
+                                autoComplete="tel"
+                                inputMode="tel"
+                                placeholder="1xxxxxxxxx"
+                                className="flex-1 bg-white dark:bg-surface-dark/80 px-4 text-right text-base text-text-main dark:text-white placeholder:text-text-muted/60 dark:placeholder:text-gray-400/60 outline-none"
+                                required
+                            />
+                        </div>
+                    </div>
+
+                    <div className="space-y-2">
+                        <label className="block text-sm font-semibold text-text-main dark:text-gray-200" htmlFor="email">
+                            البريد الإلكتروني
+                        </label>
+                        <input
+                            id="email"
+                            name="email"
+                            type="email"
+                            autoComplete="email"
+                            inputMode="email"
+                            placeholder="example@domain.com"
+                            className="w-full h-12 rounded-xl border border-border-light dark:border-border-dark bg-white dark:bg-surface-dark/80 px-4 text-right text-base text-text-main dark:text-white placeholder:text-text-muted/60 dark:placeholder:text-gray-400/60 outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/20"
+                            required
+                        />
+                    </div>
+
+                    <div className="space-y-2">
+                        <label className="block text-sm font-semibold text-text-main dark:text-gray-200" htmlFor="password">
+                            كلمة المرور
+                        </label>
+                        <div className="relative">
+                            <input
+                                id="password"
+                                name="password"
+                                type={showPassword ? 'text' : 'password'}
+                                autoComplete="new-password"
+                                minLength={8}
+                                placeholder="8 أحرف على الأقل"
+                                className="w-full h-12 rounded-xl border border-border-light dark:border-border-dark bg-white dark:bg-surface-dark/80 px-4 pl-12 text-right text-base text-text-main dark:text-white placeholder:text-text-muted/60 dark:placeholder:text-gray-400/60 outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/20"
+                                required
+                            />
+                            <button
+                                type="button"
+                                className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-primary transition-colors"
+                                onClick={() => setShowPassword((prev) => !prev)}
+                                aria-label={showPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}
+                            >
+                                <span className="material-symbols-outlined text-[20px]">
+                                    {showPassword ? 'visibility_off' : 'visibility'}
+                                </span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <label className="flex items-start gap-2 text-sm text-text-muted dark:text-gray-400 cursor-pointer">
+                        <input
+                            type="checkbox"
+                            className="mt-1 h-4 w-4 rounded border-border-light dark:border-border-dark text-primary focus:ring-primary/40"
                             checked={agreedToTerms}
                             onChange={(e) => setAgreedToTerms(e.target.checked)}
-                            className="peer h-5 w-5 cursor-pointer appearance-none rounded border border-slate-300 dark:border-slate-600 bg-surface-light dark:bg-surface-dark checked:bg-primary checked:border-primary transition-all"
-                            id="terms"
-                            type="checkbox"
                         />
-                        <span className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-white opacity-0 peer-checked:opacity-100 material-symbols-outlined text-[16px]">
-                            check
+                        <span>
+                            أوافق على <a className="text-primary font-semibold hover:underline" href="#">الشروط والأحكام</a> و{' '}
+                            <a className="text-primary font-semibold hover:underline" href="#">سياسة الخصوصية</a>
                         </span>
-                    </div>
-                    <label className="text-sm text-slate-600 dark:text-slate-400 leading-tight pt-0.5 cursor-pointer" htmlFor="terms">
-                        أوافق على <a className="text-primary font-bold hover:underline" href="#">الشروط والأحكام</a> و <a className="text-primary font-bold hover:underline" href="#">سياسة الخصوصية</a>
                     </label>
-                </div>
 
-                {/* Error Message */}
-                {error && (
-                    <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-sm text-center">
-                        {error}
+                    {error && (
+                        <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-center text-sm text-red-500 dark:text-red-300">
+                            {error}
+                        </div>
+                    )}
+
+                    <button
+                        disabled={loading || socialLoading !== null}
+                        className="w-full h-12 rounded-xl bg-primary text-white font-bold hover:bg-blue-700 transition-all disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg shadow-primary/25"
+                        type="submit"
+                    >
+                        {loading && (
+                            <span className="inline-block h-5 w-5 rounded-full border-2 border-white/50 border-t-white animate-spin" />
+                        )}
+                        <span>{loading ? 'جارٍ إنشاء الحساب...' : 'إنشاء الحساب'}</span>
+                    </button>
+                </form>
+
+                <div className="mt-5">
+                    <div className="relative flex items-center py-1">
+                        <div className="flex-grow border-t border-border-light dark:border-border-dark" />
+                        <span className="mx-3 text-xs text-text-muted dark:text-gray-400">أو أنشئ الحساب عبر</span>
+                        <div className="flex-grow border-t border-border-light dark:border-border-dark" />
                     </div>
-                )}
 
-                {/* Submit Button */}
-                <button
-                    disabled={loading}
-                    className="mt-4 w-full h-14 rounded-xl bg-primary text-white text-lg font-bold hover:bg-primary/90 focus:ring-4 focus:ring-primary/20 active:scale-[0.98] transition-all shadow-lg shadow-primary/20 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                    type="submit"
-                >
-                    <span>{loading ? 'جاري التسجيل...' : 'تسجيل حساب'}</span>
-                    <span className="material-symbols-outlined rtl:rotate-180 text-[20px]">arrow_forward</span>
-                </button>
-            </form>
-
-            {/* Social Login */}
-            <div className="px-6 mt-8">
-                <div className="relative flex py-2 items-center">
-                    <div className="flex-grow border-t border-slate-200 dark:border-slate-700"></div>
-                    <span className="flex-shrink-0 mx-4 text-slate-400 text-sm font-medium">أو سجل باستخدام</span>
-                    <div className="flex-grow border-t border-slate-200 dark:border-slate-700"></div>
+                    <div className="mt-3 grid grid-cols-3 gap-3">
+                        <button
+                            onClick={() => handleSocialLogin('google')}
+                            className="h-11 rounded-xl border border-border-light dark:border-border-dark bg-white dark:bg-surface-dark text-sm font-semibold text-text-main dark:text-white hover:bg-gray-50 dark:hover:bg-white/5 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                            type="button"
+                            disabled={loading || socialLoading !== null}
+                        >
+                            {socialLoading === 'google' ? 'جارٍ...' : 'جوجل'}
+                        </button>
+                        <button
+                            onClick={() => handleSocialLogin('facebook')}
+                            className="h-11 rounded-xl border border-border-light dark:border-border-dark bg-white dark:bg-surface-dark text-sm font-semibold text-text-main dark:text-white hover:bg-gray-50 dark:hover:bg-white/5 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                            type="button"
+                            disabled={loading || socialLoading !== null}
+                        >
+                            {socialLoading === 'facebook' ? 'جارٍ...' : 'فيسبوك'}
+                        </button>
+                        <button
+                            onClick={() => handleSocialLogin('apple')}
+                            className="h-11 rounded-xl border border-border-light dark:border-border-dark bg-white dark:bg-surface-dark text-sm font-semibold text-text-main dark:text-white hover:bg-gray-50 dark:hover:bg-white/5 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                            type="button"
+                            disabled={loading || socialLoading !== null}
+                        >
+                            {socialLoading === 'apple' ? 'جارٍ...' : 'Apple'}
+                        </button>
+                    </div>
                 </div>
-                <div className="grid grid-cols-2 gap-4 mt-4">
-                    <button onClick={() => signInWithGoogle()} className="flex items-center justify-center gap-3 h-12 rounded-xl border border-slate-200 dark:border-slate-700 bg-surface-light dark:bg-surface-dark hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
-                        <img
-                            alt="شعار جوجل"
-                            className="w-5 h-5"
-                            src="https://lh3.googleusercontent.com/aida-public/AB6AXuALbAWA2T7nD8VeAqHSk9mZQrbmFqYCdoC3KSnBcHrLmElt7bvNxdyeAN_InaedViiwrmTjnE-bQ3FSYe2ZCnsecdoe4GJrN3yNBvJwdHVnm6s_BbR-6K7_WRs-_g15KhFq8FTM3mmRmaT2cEnCzRN5oqLlWHJYyb68-nkynQwt07Fk4_RK0LidMuCrf6uA1c7a1FtHzQWBgBcYOvlhYh881766IVgdEJX4eEaqTRyPkW_52UvmCp3rjRQby37FBvLugUCDIaKVUEI"
-                        />
-                        <span className="text-slate-700 dark:text-slate-200 font-bold text-sm">جوجل</span>
-                    </button>
-                    <button onClick={() => signInWithFacebook()} className="flex items-center justify-center gap-3 h-12 rounded-xl border border-slate-200 dark:border-slate-700 bg-surface-light dark:bg-surface-dark hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
-                        <img
-                            alt="شعار فيسبوك"
-                            className="w-5 h-5"
-                            src="https://lh3.googleusercontent.com/aida-public/AB6AXuBI-hk8zymX19V0dn4LjYKt-KogyMCTx4uHkemuoHowk_aH7MTzAqmOn_J0fFL_Nyh3y7PtiVo5R3N7IzJ55WZFvM47Fhvck8A418Tzma98HVr57aV-beoDbO_shEZlsgN850uAM1UJfcP-z4ach3B1GI3n2pKV2U54uRbK_WQkBt0iB77p2lWVG1xK3gJ99yxD6QapZGXXQTwJfxcXqzSNleMVhsyeO3ICA2FPl0vBvXOQml2YAds7pNZsIJQurW9O2QwzB0x6Kgw"
-                        />
-                        <span className="text-slate-700 dark:text-slate-200 font-bold text-sm">فيسبوك</span>
-                    </button>
-                </div>
-            </div>
+            </main>
 
-            {/* Footer Link */}
-            <div className="mt-8 text-center pb-6">
-                <p className="text-slate-500 dark:text-slate-400 text-sm">
-                    لديك حساب بالفعل؟{' '}
-                    <button onClick={onSwitchToLogin} className="text-primary font-bold hover:underline">
+            <footer className="px-5 pb-6 pt-2 text-center sm:px-6">
+                <p className="text-sm text-text-muted dark:text-gray-400">
+                    لديك حساب بالفعل؟
+                    <button onClick={onSwitchToLogin} className="text-primary font-bold hover:underline pr-1" type="button">
                         تسجيل الدخول
                     </button>
                 </p>
-            </div>
-
-            <div className="h-6 w-full"></div>
+            </footer>
         </div>
     );
 }

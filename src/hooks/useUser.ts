@@ -3,13 +3,15 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
+import type { UserRole } from '@/types';
+import { normalizeRole } from '@/lib/roles';
 
 export interface UserProfile {
     id: string;
     full_name: string | null;
     avatar_url: string | null;
     phone: string | null;
-    role: 'مؤجر' | 'مستأجر' | 'admin';
+    role: UserRole;
     is_verified: boolean;
     is_admin: boolean;
 }
@@ -21,7 +23,7 @@ export interface AppUser {
     phone: string;
     email?: string;
     avatar?: string;
-    role: 'مؤجر' | 'مستأجر' | 'admin';
+    role: UserRole;
     nationalId?: string;
     isVerified: boolean;
     favorites: string[];
@@ -46,7 +48,7 @@ export function useUser() {
         avatar_url: string | null;
         phone: string | null;
         national_id: string | null;
-        role: 'مؤجر' | 'مستأجر' | 'admin';
+        role: string | null;
         is_verified: boolean;
         is_admin: boolean;
         created_at: string;
@@ -72,7 +74,7 @@ export function useUser() {
                     name: authUser.user_metadata?.full_name || 'مستخدم',
                     phone: '',
                     email: authUser.email,
-                    role: 'مستأجر',
+                    role: 'tenant',
                     isVerified: false,
                     favorites: [],
                     unlockedProperties: [],
@@ -82,6 +84,12 @@ export function useUser() {
                 };
             }
 
+            const profileRole = normalizeRole(profile.role);
+            const normalizedProfile: UserProfile = {
+                ...profile,
+                role: profileRole,
+            };
+
             // Map Supabase profile to AppUser
             return {
                 id: authUser.id,
@@ -89,7 +97,7 @@ export function useUser() {
                 phone: profile.phone || '',
                 email: authUser.email,
                 avatar: profile.avatar_url || undefined,
-                role: profile.role || 'مستأجر',
+                role: profileRole,
                 nationalId: profile.national_id || undefined,
                 isVerified: profile.is_verified || false,
                 favorites: [], // Will be fetched separately
@@ -98,7 +106,7 @@ export function useUser() {
                 lastLogin: new Date().toISOString(),
                 memberSince: profile.created_at,
                 authUser,
-                profile: profile as UserProfile,
+                profile: normalizedProfile,
             };
         } catch (error) {
             console.error('Error fetching profile:', error);

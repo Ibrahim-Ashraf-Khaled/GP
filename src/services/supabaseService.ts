@@ -1,20 +1,115 @@
-
+﻿
 import { supabase, STORAGE_BUCKET, uploadImage, deleteImage } from '@/lib/supabase';
 import { Conversation, Message, Profile } from '@/types/messaging';
+import type { PublicBookingPeriod, TenantPropertyState, UserRole } from '@/types';
+import { normalizeRole } from '@/lib/roles';
 
 // === Mock Mode Flag ===
 export const IS_MOCK_MODE =
     typeof window !== 'undefined'
         ? window.localStorage.getItem('DEV_MOCK_MODE') === 'true'
         : process.env.NEXT_PUBLIC_IS_MOCK_MODE === 'true';
+const PUBLIC_BOOKING_PERIODS_RPC_ENABLED = process.env.NEXT_PUBLIC_ENABLE_PUBLIC_BOOKING_PERIODS_RPC === 'true';
 
-// أنواع البيانات
+const DATE_ONLY_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+const UNLOCK_FEE = 50;
+let publicBookingPeriodsRpcAvailable = PUBLIC_BOOKING_PERIODS_RPC_ENABLED;
+
+type UnlockablePayment = {
+    id: string;
+    amount: number;
+    is_consumed: boolean | null;
+};
+
+type TenantPropertyBookingRow = {
+    id: string;
+    start_date: string;
+    end_date: string;
+    status: 'pending' | 'confirmed' | 'cancelled' | 'completed';
+    created_at: string;
+};
+
+function normalizeDateOnly(value: string): string | null {
+    if (!value) return null;
+
+    const trimmed = value.trim();
+    const maybeDateOnly = DATE_ONLY_REGEX.test(trimmed) ? trimmed : trimmed.split('T')[0];
+
+    if (!DATE_ONLY_REGEX.test(maybeDateOnly)) return null;
+
+    const [year, month, day] = maybeDateOnly.split('-').map(Number);
+    const candidate = new Date(Date.UTC(year, month - 1, day));
+
+    if (
+        candidate.getUTCFullYear() !== year ||
+        candidate.getUTCMonth() + 1 !== month ||
+        candidate.getUTCDate() !== day
+    ) {
+        return null;
+    }
+
+    return `${year.toString().padStart(4, '0')}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+}
+
+function buildBookingSystemMessage(startDate: string, endDate: string): string {
+    return `تم إرسال طلب حجز جديد للفترة من ${startDate} إلى ${endDate}.`;
+}
+
+async function getApprovedUnlockPayment(
+    userId: string,
+    propertyId: string,
+    paymentId?: string
+): Promise<UnlockablePayment> {
+    let query = supabase
+        .from('payment_requests')
+        .select('id, amount, is_consumed')
+        .eq('user_id', userId)
+        .eq('property_id', propertyId)
+        .eq('status', 'approved')
+        .or('is_consumed.eq.false,is_consumed.is.null');
+
+    if (paymentId) {
+        query = query.eq('id', paymentId);
+    }
+
+    const { data: rawPayment, error: paymentError } = await query.maybeSingle();
+    const payment = rawPayment as UnlockablePayment | null;
+
+    if (paymentError) {
+        throw new Error(`ط®ط·ط£ ظپظٹ ط§ظ„طھط­ظ‚ظ‚ ظ…ظ† ط§ظ„ط¯ظپط¹: ${paymentError.message}`);
+    }
+
+    if (!payment) {
+        throw new Error('ظ„ط§ ظٹظˆط¬ط¯ ط¯ظپط¹ ظ…ط¹طھظ…ط¯ ظ„ظ‡ط°ط§ ط§ظ„ط¹ظ‚ط§ط±');
+    }
+
+    if (payment.amount < UNLOCK_FEE) {
+        throw new Error(
+            `ط§ظ„ظ…ط¨ظ„ط؛ ط§ظ„ظ…ط¯ظپظˆط¹ (${payment.amount} ط¬ظ†ظٹظ‡) ط£ظ‚ظ„ ظ…ظ† ط§ظ„ط±ط³ظˆظ… ط§ظ„ظ…ط·ظ„ظˆط¨ط© (${UNLOCK_FEE} ط¬ظ†ظٹظ‡)`
+        );
+    }
+
+    if (payment.is_consumed === null) {
+        const { error: normalizeError } = await supabase
+            .from('payment_requests')
+            .update({ is_consumed: false })
+            .eq('id', payment.id);
+
+        if (normalizeError) {
+            throw new Error(`Failed to normalize payment consumption state: ${normalizeError.message}`);
+        }
+    }
+
+    return payment;
+}
+
+// ط£ظ†ظˆط§ط¹ ط§ظ„ط¨ظٹط§ظ†ط§طھ
 export interface UserProfile {
     id: string;
     full_name: string | null;
     avatar_url: string | null;
     phone: string | null;
-    role: 'مؤجر' | 'مستأجر' | 'admin';
+    role: UserRole;
     is_verified: boolean;
     is_admin: boolean;
 }
@@ -55,21 +150,21 @@ export interface PropertyRow extends PropertyInsert {
 const MOCK_PROPERTIES: PropertyRow[] = [
     {
         id: '1',
-        title: 'شقة فاخرة تطل على البحر',
-        description: 'شقة رائعة بفيو مباشر على البحر، مكونة من 3 غرف وصالة كبيرة. تشطيب سوبر لوكس ومجهزة بالكامل.',
+        title: 'ط´ظ‚ط© ظپط§ط®ط±ط© طھط·ظ„ ط¹ظ„ظ‰ ط§ظ„ط¨ط­ط±',
+        description: 'ط´ظ‚ط© ط±ط§ط¦ط¹ط© ط¨ظپظٹظˆ ظ…ط¨ط§ط´ط± ط¹ظ„ظ‰ ط§ظ„ط¨ط­ط±طŒ ظ…ظƒظˆظ†ط© ظ…ظ† 3 ط؛ط±ظپ ظˆطµط§ظ„ط© ظƒط¨ظٹط±ط©. طھط´ط·ظٹط¨ ط³ظˆط¨ط± ظ„ظˆظƒط³ ظˆظ…ط¬ظ‡ط²ط© ط¨ط§ظ„ظƒط§ظ…ظ„.',
         price: 1500,
         price_unit: 'day',
         category: 'apartment',
-        address: 'شارع البحر، جمصة',
-        area: 'منطقة الفيلات',
+        address: 'ط´ط§ط±ط¹ ط§ظ„ط¨ط­ط±طŒ ط¬ظ…طµط©',
+        area: 'ظ…ظ†ط·ظ‚ط© ط§ظ„ظپظٹظ„ط§طھ',
         bedrooms: 3,
         bathrooms: 2,
         floor_area: 120,
         floor_number: 2,
-        features: ['واي فاي', 'تكييف', 'شرفة', 'مطبخ مجهز', 'مصعد'],
+        features: ['ظˆط§ظٹ ظپط§ظٹ', 'طھظƒظٹظٹظپ', 'ط´ط±ظپط©', 'ظ…ط·ط¨ط® ظ…ط¬ظ‡ط²', 'ظ…طµط¹ط¯'],
         images: ['https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?auto=format&fit=crop&w=800&q=80'],
         owner_id: 'owner-1',
-        owner_name: 'الحاج محمد',
+        owner_name: 'ط§ظ„ط­ط§ط¬ ظ…ط­ظ…ط¯',
         owner_phone: '01012345678',
         status: 'available',
         is_verified: true,
@@ -79,21 +174,21 @@ const MOCK_PROPERTIES: PropertyRow[] = [
     },
     {
         id: '2',
-        title: 'شالية أرضي بحديقة خاصة',
-        description: 'شالية جميل قريب من السوق ومنطقة المطاعم. به حديقة خاصة ومدخل مستقل.',
+        title: 'ط´ط§ظ„ظٹط© ط£ط±ط¶ظٹ ط¨ط­ط¯ظٹظ‚ط© ط®ط§طµط©',
+        description: 'ط´ط§ظ„ظٹط© ط¬ظ…ظٹظ„ ظ‚ط±ظٹط¨ ظ…ظ† ط§ظ„ط³ظˆظ‚ ظˆظ…ظ†ط·ظ‚ط© ط§ظ„ظ…ط·ط§ط¹ظ…. ط¨ظ‡ ط­ط¯ظٹظ‚ط© ط®ط§طµط© ظˆظ…ط¯ط®ظ„ ظ…ط³طھظ‚ظ„.',
         price: 800,
         price_unit: 'day',
         category: 'chalet',
-        address: 'منطقة 15 مايو',
-        area: '15 مايو',
+        address: 'ظ…ظ†ط·ظ‚ط© 15 ظ…ط§ظٹظˆ',
+        area: '15 ظ…ط§ظٹظˆ',
         bedrooms: 2,
         bathrooms: 1,
         floor_area: 80,
         floor_number: 0,
-        features: ['حديقة', 'قريب من الخدمات', 'موقف سيارات'],
+        features: ['ط­ط¯ظٹظ‚ط©', 'ظ‚ط±ظٹط¨ ظ…ظ† ط§ظ„ط®ط¯ظ…ط§طھ', 'ظ…ظˆظ‚ظپ ط³ظٹط§ط±ط§طھ'],
         images: ['https://images.unsplash.com/photo-1523217582562-09d0def993a6?auto=format&fit=crop&w=800&q=80'],
         owner_id: 'owner-2',
-        owner_name: 'أم كريم',
+        owner_name: 'ط£ظ… ظƒط±ظٹظ…',
         owner_phone: '01122334455',
         status: 'available',
         is_verified: true,
@@ -103,21 +198,21 @@ const MOCK_PROPERTIES: PropertyRow[] = [
     },
     {
         id: '3',
-        title: 'ستوديو اقتصادي للطلاب',
-        description: 'ستوديو صغير ومريح، مناسب للطلاب أو الأفراد. قريب من الجامعة.',
+        title: 'ط³طھظˆط¯ظٹظˆ ط§ظ‚طھطµط§ط¯ظٹ ظ„ظ„ط·ظ„ط§ط¨',
+        description: 'ط³طھظˆط¯ظٹظˆ طµط؛ظٹط± ظˆظ…ط±ظٹط­طŒ ظ…ظ†ط§ط³ط¨ ظ„ظ„ط·ظ„ط§ط¨ ط£ظˆ ط§ظ„ط£ظپط±ط§ط¯. ظ‚ط±ظٹط¨ ظ…ظ† ط§ظ„ط¬ط§ظ…ط¹ط©.',
         price: 3000,
         price_unit: 'month',
         category: 'studio',
-        address: 'حي الشباب',
-        area: 'تقسيم الشباب',
+        address: 'ط­ظٹ ط§ظ„ط´ط¨ط§ط¨',
+        area: 'طھظ‚ط³ظٹظ… ط§ظ„ط´ط¨ط§ط¨',
         bedrooms: 1,
         bathrooms: 1,
         floor_area: 40,
         floor_number: 3,
-        features: ['سرير', 'مكتب', 'دولاب'],
+        features: ['ط³ط±ظٹط±', 'ظ…ظƒطھط¨', 'ط¯ظˆظ„ط§ط¨'],
         images: ['https://images.unsplash.com/photo-1554995207-c18c203602cb?auto=format&fit=crop&w=800&q=80'],
         owner_id: 'owner-1',
-        owner_name: 'الحاج محمد',
+        owner_name: 'ط§ظ„ط­ط§ط¬ ظ…ط­ظ…ط¯',
         owner_phone: '01012345678',
         status: 'available',
         is_verified: false,
@@ -127,21 +222,21 @@ const MOCK_PROPERTIES: PropertyRow[] = [
     },
     {
         id: '4',
-        title: 'فيلا مستقلة للعائلات الكبيرة',
-        description: 'فيلا دورين بحديقة وحمام سباحة، تكفي عائلة كبيرة. قريبة من البحر.',
+        title: 'ظپظٹظ„ط§ ظ…ط³طھظ‚ظ„ط© ظ„ظ„ط¹ط§ط¦ظ„ط§طھ ط§ظ„ظƒط¨ظٹط±ط©',
+        description: 'ظپظٹظ„ط§ ط¯ظˆط±ظٹظ† ط¨ط­ط¯ظٹظ‚ط© ظˆط­ظ…ط§ظ… ط³ط¨ط§ط­ط©طŒ طھظƒظپظٹ ط¹ط§ط¦ظ„ط© ظƒط¨ظٹط±ط©. ظ‚ط±ظٹط¨ط© ظ…ظ† ط§ظ„ط¨ط­ط±.',
         price: 5000,
         price_unit: 'day',
         category: 'villa',
-        address: 'منطقة الفيلات الجديدة',
-        area: 'منطقة الفيلات',
+        address: 'ظ…ظ†ط·ظ‚ط© ط§ظ„ظپظٹظ„ط§طھ ط§ظ„ط¬ط¯ظٹط¯ط©',
+        area: 'ظ…ظ†ط·ظ‚ط© ط§ظ„ظپظٹظ„ط§طھ',
         bedrooms: 5,
         bathrooms: 4,
         floor_area: 300,
         floor_number: 0,
-        features: ['حمام سباحة', 'حديقة كبيرة', 'جراج', 'تكييف مركزي'],
+        features: ['ط­ظ…ط§ظ… ط³ط¨ط§ط­ط©', 'ط­ط¯ظٹظ‚ط© ظƒط¨ظٹط±ط©', 'ط¬ط±ط§ط¬', 'طھظƒظٹظٹظپ ظ…ط±ظƒط²ظٹ'],
         images: ['https://images.unsplash.com/photo-1613490493576-7fde63acd811?auto=format&fit=crop&w=800&q=80'],
         owner_id: 'owner-3',
-        owner_name: 'د. محمود',
+        owner_name: 'ط¯. ظ…ط­ظ…ظˆط¯',
         owner_phone: '01233445566',
         status: 'available',
         is_verified: true,
@@ -192,10 +287,17 @@ export const supabaseService = {
                 error: null
             };
         }
+        const normalizedData = data
+            ? {
+                ...data,
+                role: normalizeRole(data.role),
+            }
+            : data;
+
         return await supabase.auth.signUp({
             email,
             password: pass,
-            options: { data }
+            options: { data: normalizedData }
         });
     },
 
@@ -210,10 +312,10 @@ export const supabaseService = {
         if (IS_MOCK_MODE) {
             return {
                 id: userId,
-                full_name: 'مستخدم تجريبي',
+                full_name: 'ظ…ط³طھط®ط¯ظ… طھط¬ط±ظٹط¨ظٹ',
                 avatar_url: null,
                 phone: '01000000000',
-                role: 'مؤجر',
+                role: 'landlord',
                 is_admin: true,
                 is_verified: true
             };
@@ -229,10 +331,18 @@ export const supabaseService = {
             console.error('Error fetching profile:', error);
             return null;
         }
-        return data as UserProfile;
+        if (!data) {
+            return null;
+        }
+
+        const row = data as UserProfile & { role: string | null };
+        return {
+            ...row,
+            role: normalizeRole(row.role),
+        };
     },
 
-    // ====== رفع الصور ======
+    // ====== ط±ظپط¹ ط§ظ„طµظˆط± ======
     async uploadPropertyImages(files: File[], userId: string): Promise<string[]> {
         if (IS_MOCK_MODE) {
             // Return fake cloud URLs
@@ -252,7 +362,7 @@ export const supabaseService = {
         return uploadedUrls;
     },
 
-    // ====== حذف الصور ======
+    // ====== ط­ط°ظپ ط§ظ„طµظˆط± ======
     async deletePropertyImage(url: string): Promise<void> {
         if (IS_MOCK_MODE) return;
         await deleteImage(url);
@@ -260,7 +370,7 @@ export const supabaseService = {
 
 
 
-    // ====== العقارات ======
+    // ====== ط§ظ„ط¹ظ‚ط§ط±ط§طھ ======
     async createFullProperty(
         propertyData: PropertyInsert,
         imageFiles: File[],
@@ -283,13 +393,13 @@ export const supabaseService = {
         }
 
         try {
-            // 1. رفع الصور أولاً
+            // 1. ط±ظپط¹ ط§ظ„طµظˆط± ط£ظˆظ„ط§ظ‹
             let imageUrls: string[] = [];
             if (imageFiles.length > 0) {
                 imageUrls = await this.uploadPropertyImages(imageFiles, userId);
             }
 
-            // 2. حفظ العقار في قاعدة البيانات
+            // 2. ط­ظپط¸ ط§ظ„ط¹ظ‚ط§ط± ظپظٹ ظ‚ط§ط¹ط¯ط© ط§ظ„ط¨ظٹط§ظ†ط§طھ
             const { data, error } = await supabase
                 .from('properties')
                 .insert({
@@ -305,7 +415,7 @@ export const supabaseService = {
                 for (const url of imageUrls) {
                     await this.deletePropertyImage(url);
                 }
-                throw new Error(`فشل حفظ العقار: ${error.message}`);
+                throw new Error(`ظپط´ظ„ ط­ظپط¸ ط§ظ„ط¹ظ‚ط§ط±: ${error.message}`);
             }
 
             return data as PropertyRow;
@@ -325,17 +435,33 @@ export const supabaseService = {
         bathrooms?: number;
         features?: string[];
         ownerId?: string;
+        q?: string;
+        limit?: number;
+        offset?: number;
     }): Promise<PropertyRow[]> {
         if (IS_MOCK_MODE) {
             let filtered = [...MOCK_PROPERTIES];
             if (filters?.status) filtered = filtered.filter(p => p.status === filters.status);
             if (filters?.category) filtered = filtered.filter(p => p.category === filters.category);
-            if (filters?.area && filters.area !== 'الكل') filtered = filtered.filter(p => p.area === filters.area);
+            if (filters?.area && filters.area !== 'ط§ظ„ظƒظ„') filtered = filtered.filter(p => p.area === filters.area);
             if (filters?.minPrice) filtered = filtered.filter(p => p.price >= filters.minPrice!);
             if (filters?.maxPrice) filtered = filtered.filter(p => p.price <= filters.maxPrice!);
             if (filters?.bedrooms) filtered = filtered.filter(p => (p.bedrooms || 0) >= filters.bedrooms!);
             if (filters?.bathrooms) filtered = filtered.filter(p => (p.bathrooms || 0) >= filters.bathrooms!);
             if (filters?.ownerId) filtered = filtered.filter(p => p.owner_id === filters.ownerId);
+            if (filters?.q) {
+                const normalizedQuery = filters.q.trim().toLowerCase();
+                filtered = filtered.filter((property) =>
+                    property.title.toLowerCase().includes(normalizedQuery) ||
+                    (property.address || '').toLowerCase().includes(normalizedQuery) ||
+                    (property.area || '').toLowerCase().includes(normalizedQuery),
+                );
+            }
+            if (typeof filters?.offset === 'number' || typeof filters?.limit === 'number') {
+                const start = Math.max(filters?.offset ?? 0, 0);
+                const end = typeof filters?.limit === 'number' ? start + filters.limit : undefined;
+                filtered = filtered.slice(start, end);
+            }
             return filtered;
         }
 
@@ -346,13 +472,21 @@ export const supabaseService = {
 
         if (filters?.status) query = query.eq('status', filters.status);
         if (filters?.category) query = query.eq('category', filters.category);
-        if (filters?.area && filters.area !== 'الكل') query = query.eq('area', filters.area);
+        if (filters?.area && filters.area !== 'ط§ظ„ظƒظ„') query = query.eq('area', filters.area);
         if (filters?.minPrice) query = query.gte('price', filters.minPrice);
         if (filters?.maxPrice) query = query.lte('price', filters.maxPrice);
         if (filters?.bedrooms) query = query.gte('bedrooms', filters.bedrooms);
         if (filters?.bathrooms) query = query.gte('bathrooms', filters.bathrooms);
         if (filters?.features && filters.features.length > 0) query = query.contains('features', filters.features);
         if (filters?.ownerId) query = query.eq('owner_id', filters.ownerId);
+        if (filters?.q?.trim()) {
+            const searchQuery = filters.q.trim();
+            query = query.or(`title.ilike.%${searchQuery}%,address.ilike.%${searchQuery}%,area.ilike.%${searchQuery}%`);
+        }
+        if (typeof filters?.limit === 'number') {
+            const offset = Math.max(filters.offset ?? 0, 0);
+            query = query.range(offset, offset + filters.limit - 1);
+        }
 
         const { data, error } = await query;
         if (error) {
@@ -371,10 +505,10 @@ export const supabaseService = {
             .from('properties')
             .select('*')
             .eq('id', id)
-            .single();
+            .maybeSingle();
 
         if (error) {
-            console.error('Error fetching property:', error);
+            console.error('Error fetching property:', { id, error });
             return null;
         }
         return data as PropertyRow;
@@ -444,7 +578,7 @@ export const supabaseService = {
         return !error;
     },
 
-    // ====== المفضلة ======
+    // ====== ط§ظ„ظ…ظپط¶ظ„ط© ======
     async getFavorites(userId: string): Promise<string[]> {
         if (IS_MOCK_MODE) {
             return Array.from(_mockFavorites);
@@ -496,7 +630,7 @@ export const supabaseService = {
         }
     },
 
-    // ====== العقارات المفتوحة ======
+    // ====== ط§ظ„ط¹ظ‚ط§ط±ط§طھ ط§ظ„ظ…ظپطھظˆط­ط© ======
     async getUnlockedProperties(userId: string): Promise<string[]> {
         if (IS_MOCK_MODE) {
             return Array.from(_mockUnlocked);
@@ -530,52 +664,150 @@ export const supabaseService = {
         return !!data;
     },
 
-    async unlockProperty(userId: string, propertyId: string): Promise<void> {
+    async getPublicBookingPeriods(propertyId: string): Promise<PublicBookingPeriod[]> {
+        if (IS_MOCK_MODE) {
+            return [];
+        }
+
+        if (!publicBookingPeriodsRpcAvailable) {
+            return [];
+        }
+
+        const { data, error } = await supabase.rpc('get_public_property_booking_periods', {
+            p_property_id: propertyId,
+        });
+
+        if (error) {
+            const rpcError = error as {
+                code?: string;
+                message?: string;
+                details?: string;
+                hint?: string;
+            };
+
+            const isMissingRpc =
+                rpcError.code === 'PGRST202' ||
+                rpcError.code === '404' ||
+                rpcError.message?.includes('get_public_property_booking_periods') ||
+                rpcError.details?.includes('get_public_property_booking_periods') ||
+                rpcError.hint?.includes('get_public_property_booking_periods');
+
+            if (isMissingRpc) {
+                publicBookingPeriodsRpcAvailable = false;
+            }
+
+            if (!isMissingRpc) {
+                console.error('Error fetching public booking periods:', {
+                    code: rpcError.code,
+                    message: rpcError.message,
+                    details: rpcError.details,
+                    hint: rpcError.hint,
+                });
+            }
+
+            return [];
+        }
+
+        return ((data || []) as Array<{ start_date: string; end_date: string }>).map((period) => ({
+            startDate: period.start_date,
+            endDate: period.end_date,
+        }));
+    },
+
+    async getTenantPropertyState(userId: string, propertyId: string): Promise<TenantPropertyState> {
+        if (IS_MOCK_MODE) {
+            return {
+                unlockedAt: _mockUnlocked.has(propertyId) ? new Date().toISOString() : null,
+                unlockRequestStatus: _mockUnlocked.has(propertyId) ? 'approved' : 'none',
+                latestBooking: null,
+                hasBookingHistory: false,
+            };
+        }
+
+        const [
+            { data: unlockData, error: unlockError },
+            { data: bookingData, error: bookingError },
+            { data: paymentData, error: paymentError },
+        ] = await Promise.all([
+            supabase
+                .from('unlocked_properties')
+                .select('unlocked_at')
+                .eq('user_id', userId)
+                .eq('property_id', propertyId)
+                .maybeSingle(),
+            supabase
+                .from('bookings')
+                .select('id, start_date, end_date, status, created_at')
+                .eq('user_id', userId)
+                .eq('property_id', propertyId)
+                .order('created_at', { ascending: false })
+                .limit(1),
+            supabase
+                .from('payment_requests')
+                .select('status')
+                .eq('user_id', userId)
+                .eq('property_id', propertyId)
+                .order('created_at', { ascending: false })
+                .limit(1),
+        ]);
+
+        if (unlockError) {
+            console.error('Error fetching unlocked property state:', unlockError);
+        }
+
+        if (bookingError) {
+            console.error('Error fetching tenant booking state:', bookingError);
+        }
+
+        if (paymentError) {
+            console.error('Error fetching unlock payment state:', paymentError);
+        }
+
+        const latestBookingRow = ((bookingData || [])[0] || null) as TenantPropertyBookingRow | null;
+        const latestPaymentStatus = ((paymentData || [])[0] as { status?: 'pending' | 'approved' | 'rejected' } | undefined)?.status;
+
+        return {
+            unlockedAt: unlockData?.unlocked_at || null,
+            unlockRequestStatus: latestPaymentStatus || 'none',
+            latestBooking: latestBookingRow
+                ? {
+                    id: latestBookingRow.id,
+                    startDate: latestBookingRow.start_date,
+                    endDate: latestBookingRow.end_date,
+                    status: latestBookingRow.status,
+                    createdAt: latestBookingRow.created_at,
+                }
+                : null,
+            hasBookingHistory: Boolean(latestBookingRow),
+        };
+    },
+
+    async unlockProperty(userId: string, propertyId: string, paymentId?: string): Promise<void> {
         if (IS_MOCK_MODE) {
             _mockUnlocked.add(propertyId);
             return;
         }
 
+        if (!userId || !propertyId) {
+            throw new Error('userId and propertyId are required');
+        }
+
         try {
-            // ✅ STEP 1: Verify payment exists and is approved
-            const { data: payment, error: paymentError } = await supabase
-                .from('payment_requests')
-                .select('*')
-                .eq('user_id', userId)
-                .eq('property_id', propertyId)
-                .eq('status', 'approved')
-                .eq('is_consumed', false)
-                .maybeSingle();
+            const payment = await getApprovedUnlockPayment(userId, propertyId, paymentId);
 
-            if (paymentError) {
-                throw new Error(`خطأ في التحقق من الدفع: ${paymentError.message}`);
-            }
-
-            if (!payment) {
-                throw new Error('لا يوجد دفع معتمد لهذا العقار');
-            }
-
-            // ✅ STEP 2: Verify amount
-            const UNLOCK_FEE = 50; // EGP
-            if (payment.amount < UNLOCK_FEE) {
-                throw new Error(
-                    `المبلغ المدفوع (${payment.amount} جنيه) أقل من الرسوم المطلوبة (${UNLOCK_FEE} جنيه)`
-                );
-            }
-
-            // ✅ STEP 3: Check if already unlocked
+            // âœ… STEP 2: Check if already unlocked
             const { data: alreadyUnlocked } = await supabase
                 .from('unlocked_properties')
-                .select('id')
+                .select('property_id')
                 .eq('user_id', userId)
                 .eq('property_id', propertyId)
                 .maybeSingle();
 
             if (alreadyUnlocked) {
-                throw new Error('العقار مفتوح بالفعل');
+                throw new Error('ط§ظ„ط¹ظ‚ط§ط± ظ…ظپطھظˆط­ ط¨ط§ظ„ظپط¹ظ„');
             }
 
-            // ✅ STEP 4: Atomic operation - mark payment consumed + unlock property
+            // âœ… STEP 3: Atomic operation - mark payment consumed + unlock property
             const { error: unlockError } = await supabase.rpc('unlock_property_with_payment', {
                 p_user_id: userId,
                 p_property_id: propertyId,
@@ -583,7 +815,7 @@ export const supabaseService = {
             });
 
             if (unlockError) {
-                throw new Error(`فشل فتح العقار: ${unlockError.message}`);
+                throw new Error(`ظپط´ظ„ ظپطھط­ ط§ظ„ط¹ظ‚ط§ط±: ${unlockError.message}`);
             }
 
         } catch (error: any) {
@@ -592,7 +824,70 @@ export const supabaseService = {
         }
     },
 
-    // ====== طلبات الدفع ======
+    async approvePaymentAndUnlock(paymentId: string, userId: string, propertyId: string): Promise<void> {
+        if (IS_MOCK_MODE) {
+            _mockUnlocked.add(propertyId);
+            return;
+        }
+
+        if (!paymentId || !userId || !propertyId) {
+            throw new Error('paymentId, userId, and propertyId are required');
+        }
+
+        try {
+            const { data: existingPayment, error: existingPaymentError } = await supabase
+                .from('payment_requests')
+                .select('id, user_id, property_id, status, is_consumed')
+                .eq('id', paymentId)
+                .maybeSingle();
+
+            if (existingPaymentError) {
+                throw new Error(`Failed to load payment request before approval: ${existingPaymentError.message}`);
+            }
+
+            if (!existingPayment) {
+                throw new Error('Payment request was not found before approval');
+            }
+
+            if (existingPayment.user_id !== userId || existingPayment.property_id !== propertyId) {
+                throw new Error('Payment request data does not match the selected property');
+            }
+
+            const { error: approvalError } = await supabase
+                .from('payment_requests')
+                .update({
+                    status: 'approved',
+                    processed_at: new Date().toISOString(),
+                    is_consumed: false,
+                })
+                .eq('id', paymentId);
+
+            if (approvalError) {
+                throw new Error(`Failed to approve payment request: ${approvalError.message}`);
+            }
+
+            const { data: approvedPayment, error: approvedPaymentError } = await supabase
+                .from('payment_requests')
+                .select('id, status')
+                .eq('id', paymentId)
+                .maybeSingle();
+
+            if (approvedPaymentError) {
+                throw new Error(`Failed to verify approved payment request: ${approvedPaymentError.message}`);
+            }
+
+            if (!approvedPayment || approvedPayment.status !== 'approved') {
+                throw new Error('Payment request approval was not applied');
+            }
+
+            await supabaseService.unlockProperty(userId, propertyId, paymentId);
+        } catch (error: any) {
+            console.error('Error approving payment request:', error);
+            throw error;
+        }
+    },
+
+    // ====== ط·ظ„ط¨ط§طھ ط§ظ„ط¯ظپط¹ ======
     async createPaymentRequest(params: {
         userId: string;
         propertyId: string;
@@ -615,11 +910,11 @@ export const supabaseService = {
             });
 
         if (error) {
-            throw new Error(`فشل إرسال طلب الدفع: ${error.message}`);
+            throw new Error(`ظپط´ظ„ ط¥ط±ط³ط§ظ„ ط·ظ„ط¨ ط§ظ„ط¯ظپط¹: ${error.message}`);
         }
     },
 
-    // ====== الإشعارات ======
+    // ====== ط§ظ„ط¥ط´ط¹ط§ط±ط§طھ ======
     async getNotifications(userId: string): Promise<{
         id: string;
         title: string;
@@ -633,8 +928,8 @@ export const supabaseService = {
             return [
                 {
                     id: 'notif-1',
-                    title: 'مرحباً بك في عقارات جمصة',
-                    message: 'نتمنى لك تجربة ممتعة في البحث عن عقارك المثالي.',
+                    title: 'ظ…ط±ط­ط¨ط§ظ‹ ط¨ظƒ ظپظٹ ط¹ظ‚ط§ط±ط§طھ ط¬ظ…طµط©',
+                    message: 'ظ†طھظ…ظ†ظ‰ ظ„ظƒ طھط¬ط±ط¨ط© ظ…ظ…طھط¹ط© ظپظٹ ط§ظ„ط¨ط­ط« ط¹ظ† ط¹ظ‚ط§ط±ظƒ ط§ظ„ظ…ط«ط§ظ„ظٹ.',
                     type: 'info',
                     is_read: false,
                     link: null,
@@ -693,7 +988,7 @@ export const supabaseService = {
             });
     },
 
-    // ====== التقييمات ======
+    // ====== ط§ظ„طھظ‚ظٹظٹظ…ط§طھ ======
     async getReviewsForProperty(propertyId: string): Promise<{
         id: string;
         user_id: string;
@@ -707,7 +1002,7 @@ export const supabaseService = {
                     id: 'review-1',
                     user_id: 'user-2',
                     rating: 5,
-                    comment: 'عقار ممتاز ونظيف جداً، والمالك متعاون.',
+                    comment: 'ط¹ظ‚ط§ط± ظ…ظ…طھط§ط² ظˆظ†ط¸ظٹظپ ط¬ط¯ط§ظ‹طŒ ظˆط§ظ„ظ…ط§ظ„ظƒ ظ…طھط¹ط§ظˆظ†.',
                     created_at: new Date().toISOString()
                 }
             ];
@@ -746,19 +1041,19 @@ export const supabaseService = {
             });
 
         if (error) {
-            throw new Error(`فشل إضافة التقييم: ${error.message}`);
+            throw new Error(`ظپط´ظ„ ط¥ط¶ط§ظپط© ط§ظ„طھظ‚ظٹظٹظ…: ${error.message}`);
         }
     },
 
-    // ====== إدارة المستخدمين (Admin) ======
+    // ====== ط¥ط¯ط§ط±ط© ط§ظ„ظ…ط³طھط®ط¯ظ…ظٹظ† (Admin) ======
     async getAllProfiles(): Promise<any[]> {
         if (IS_MOCK_MODE) {
             return [
                 {
                     id: 'mock-user-123',
-                    full_name: 'مستخدم تجريبي',
+                    full_name: 'ظ…ط³طھط®ط¯ظ… طھط¬ط±ظٹط¨ظٹ',
                     email: 'test@example.com',
-                    role: 'مؤجر',
+                    role: 'landlord',
                     is_verified: true,
                     created_at: new Date().toISOString()
                 }
@@ -777,6 +1072,64 @@ export const supabaseService = {
         return data;
     },
 
+    async getProfileById(userId: string): Promise<UserProfile | null> {
+        if (IS_MOCK_MODE) {
+            const mockProfiles: Record<string, UserProfile> = {
+                'mock-user-123': {
+                    id: 'mock-user-123',
+                    full_name: 'مستخدم تجريبي',
+                    avatar_url: null,
+                    phone: '01000000000',
+                    role: 'landlord',
+                    is_verified: true,
+                    is_admin: false,
+                },
+                'owner-1': {
+                    id: 'owner-1',
+                    full_name: 'الحاج محمد',
+                    avatar_url: null,
+                    phone: '01012345678',
+                    role: 'landlord',
+                    is_verified: true,
+                    is_admin: false,
+                },
+                'owner-2': {
+                    id: 'owner-2',
+                    full_name: 'أم كريم',
+                    avatar_url: null,
+                    phone: '01122334455',
+                    role: 'landlord',
+                    is_verified: true,
+                    is_admin: false,
+                },
+                'owner-3': {
+                    id: 'owner-3',
+                    full_name: 'د. محمود',
+                    avatar_url: null,
+                    phone: '01233445566',
+                    role: 'landlord',
+                    is_verified: true,
+                    is_admin: false,
+                },
+            };
+
+            return mockProfiles[userId] || null;
+        }
+
+        const { data, error } = await supabase
+            .from('profiles')
+            .select('id, full_name, avatar_url, phone, role, is_verified, is_admin')
+            .eq('id', userId)
+            .maybeSingle();
+
+        if (error) {
+            console.error('Error fetching profile by id:', { userId, error });
+            return null;
+        }
+
+        return (data as UserProfile | null) || null;
+    },
+
     async updateUserProfile(userId: string, updates: any) {
         if (IS_MOCK_MODE) return { ...updates, id: userId };
 
@@ -788,12 +1141,12 @@ export const supabaseService = {
             .single();
 
         if (error) {
-            throw new Error(`فشل تحديث الملف الشخصي: ${error.message}`);
+            throw new Error(`ظپط´ظ„ طھط­ط¯ظٹط« ط§ظ„ظ…ظ„ظپ ط§ظ„ط´ط®طµظٹ: ${error.message}`);
         }
         return data;
     },
 
-    // ====== نظام المحادثة (Messaging) ======
+    // ====== ظ†ط¸ط§ظ… ط§ظ„ظ…ط­ط§ط¯ط«ط© (Messaging) ======
     async createConversation(params: {
         propertyId: string;
         buyerId: string;
@@ -821,7 +1174,7 @@ export const supabaseService = {
             .select('id')
             .single();
 
-        if (error) throw new Error(`فشل بدء المحادثة: ${error.message}`);
+        if (error) throw new Error(`ظپط´ظ„ ط¨ط¯ط، ط§ظ„ظ…ط­ط§ط¯ط«ط©: ${error.message}`);
         return data.id;
     },
 
@@ -836,9 +1189,9 @@ export const supabaseService = {
                     created_at: new Date().toISOString(),
                     updated_at: new Date().toISOString(),
                     property: MOCK_PROPERTIES[0],
-                    buyer: { full_name: 'مستخدم تجريبي', avatar_url: null },
-                    owner: { full_name: 'الحاج محمد', avatar_url: null },
-                    last_message: { text: 'هل العقار لا يزال متاحاً؟', created_at: new Date().toISOString(), is_read: false, sender_id: userId }
+                    buyer: { full_name: 'ظ…ط³طھط®ط¯ظ… طھط¬ط±ظٹط¨ظٹ', avatar_url: null },
+                    owner: { full_name: 'ط§ظ„ط­ط§ط¬ ظ…ط­ظ…ط¯', avatar_url: null },
+                    last_message: { text: 'ظ‡ظ„ ط§ظ„ط¹ظ‚ط§ط± ظ„ط§ ظٹط²ط§ظ„ ظ…طھط§ط­ط§ظ‹طں', created_at: new Date().toISOString(), is_read: false, sender_id: userId }
                 }
             ];
         }
@@ -890,7 +1243,7 @@ export const supabaseService = {
                     id: 'msg-1',
                     conversation_id: conversationId,
                     sender_id: 'mock-user-123',
-                    text: 'السلام عليكم، هل الشقة متاحة؟',
+                    text: 'ط§ظ„ط³ظ„ط§ظ… ط¹ظ„ظٹظƒظ…طŒ ظ‡ظ„ ط§ظ„ط´ظ‚ط© ظ…طھط§ط­ط©طں',
                     created_at: new Date(Date.now() - 100000).toISOString(),
                     is_read: true,
                     message_type: 'text'
@@ -899,7 +1252,7 @@ export const supabaseService = {
                     id: 'msg-2',
                     conversation_id: conversationId,
                     sender_id: 'owner-1',
-                    text: 'وعليكم السلام، نعم متاحة يا فندم.',
+                    text: 'ظˆط¹ظ„ظٹظƒظ… ط§ظ„ط³ظ„ط§ظ…طŒ ظ†ط¹ظ… ظ…طھط§ط­ط© ظٹط§ ظپظ†ط¯ظ….',
                     created_at: new Date(Date.now() - 50000).toISOString(),
                     is_read: false,
                     message_type: 'text'
@@ -946,7 +1299,7 @@ export const supabaseService = {
                 metadata: params.metadata
             });
 
-        if (error) throw new Error(`فشل إرسال الرسالة: ${error.message}`);
+        if (error) throw new Error(`ظپط´ظ„ ط¥ط±ط³ط§ظ„ ط§ظ„ط±ط³ط§ظ„ط©: ${error.message}`);
 
         await supabase
             .from('conversations')
@@ -976,7 +1329,7 @@ export const supabaseService = {
             .from('voice-notes')
             .upload(filename, audioBlob, { contentType: 'audio/webm' });
 
-        if (error) throw new Error(`فشل رفع الرسالة الصوتية: ${error.message}`);
+        if (error) throw new Error(`ظپط´ظ„ ط±ظپط¹ ط§ظ„ط±ط³ط§ظ„ط© ط§ظ„طµظˆطھظٹط©: ${error.message}`);
 
         const { data: { publicUrl } } = supabase.storage
             .from('voice-notes')
@@ -996,7 +1349,7 @@ export const supabaseService = {
             .from('chat-images')
             .upload(filename, imageFile);
 
-        if (error) throw new Error(`فشل رفع الصورة: ${error.message}`);
+        if (error) throw new Error(`ظپط´ظ„ ط±ظپط¹ ط§ظ„طµظˆط±ط©: ${error.message}`);
 
         const { data: { publicUrl } } = supabase.storage
             .from('chat-images')
@@ -1060,7 +1413,9 @@ export const supabaseService = {
             .from('conversations')
             .select(`
                 *,
-                property:properties(*)
+                property:properties(*),
+                buyer:profiles!buyer_id(full_name, avatar_url, online_status, is_verified),
+                owner:profiles!owner_id(full_name, avatar_url, online_status, is_verified)
             `)
             .eq('id', conversationId)
             .single();
@@ -1120,10 +1475,10 @@ export const supabaseService = {
         }
     },
 
-    // ====== نظام الحجز المتقدم ======
+    // ====== ظ†ط¸ط§ظ… ط§ظ„ط­ط¬ط² ط§ظ„ظ…طھظ‚ط¯ظ… ======
 
     /**
-     * حساب السعر الإجمالي للحجز
+     * ط­ط³ط§ط¨ ط§ظ„ط³ط¹ط± ط§ظ„ط¥ط¬ظ…ط§ظ„ظٹ ظ„ظ„ط­ط¬ط²
      */
     calculateTotalPrice(
         rentalConfig: import('@/types').RentalConfig,
@@ -1143,7 +1498,7 @@ export const supabaseService = {
 
         switch (type) {
             case 'daily':
-                // حساب عدد الليالي
+                // ط­ط³ط§ط¨ ط¹ط¯ط¯ ط§ظ„ظ„ظٹط§ظ„ظٹ
                 duration = Math.ceil(
                     (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)
                 );
@@ -1151,7 +1506,7 @@ export const supabaseService = {
                 break;
 
             case 'monthly':
-                // حساب عدد الأشهر (تقريبي: 30 يوم = شهر)
+                // ط­ط³ط§ط¨ ط¹ط¯ط¯ ط§ظ„ط£ط´ظ‡ط± (طھظ‚ط±ظٹط¨ظٹ: 30 ظٹظˆظ… = ط´ظ‡ط±)
                 const days = Math.ceil(
                     (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)
                 );
@@ -1160,11 +1515,11 @@ export const supabaseService = {
                 break;
 
             case 'seasonal':
-                // الفترة الدراسية ثابتة: 10 أشهر
+                // ط§ظ„ظپطھط±ط© ط§ظ„ط¯ط±ط§ط³ظٹط© ط«ط§ط¨طھط©: 10 ط£ط´ظ‡ط±
                 duration = 10;
                 basePrice = duration * pricePerUnit;
 
-                // التأمين إذا كان مطلوباً
+                // ط§ظ„طھط£ظ…ظٹظ† ط¥ط°ط§ ظƒط§ظ† ظ…ط·ظ„ظˆط¨ط§ظ‹
                 if (seasonalConfig?.requiresDeposit) {
                     depositAmount = seasonalConfig.depositAmount || pricePerUnit;
                 }
@@ -1185,40 +1540,46 @@ export const supabaseService = {
     },
 
     /**
-     * التحقق من توفر العقار في الفترة المطلوبة
+     * ط§ظ„طھط­ظ‚ظ‚ ظ…ظ† طھظˆظپط± ط§ظ„ط¹ظ‚ط§ط± ظپظٹ ط§ظ„ظپطھط±ط© ط§ظ„ظ…ط·ظ„ظˆط¨ط©
      */
     async checkAvailability(
         propertyId: string,
         startDate: string,
         endDate: string
     ): Promise<{ available: boolean; error: any }> {
+        const { validateUUID } = await import('@/utils/validation');
+
+        const normalizedStart = normalizeDateOnly(startDate);
+        const normalizedEnd = normalizeDateOnly(endDate);
+
+        if (!normalizedStart || !normalizedEnd) {
+            return { available: false, error: { message: 'صيغة التاريخ غير صالحة' } };
+        }
+
+        if (normalizedStart >= normalizedEnd) {
+            return { available: false, error: { message: 'تاريخ النهاية يجب أن يكون بعد تاريخ البداية' } };
+        }
+
         if (IS_MOCK_MODE) {
-            // في وضع Mock، نفترض أن العقار متاح دائماً
             return { available: true, error: null };
         }
 
-        // Defensive validation
-        const { validateDateString, validateUUID } = await import('@/utils/validation');
-
         if (!validateUUID(propertyId)) {
             return { available: false, error: { message: 'معرف العقار غير صالح' } };
-        }
-
-        if (!validateDateString(startDate) || !validateDateString(endDate)) {
-            return { available: false, error: { message: 'تاريخ غير صالح' } };
         }
 
         const { data, error } = await supabase
             .from('bookings')
             .select('id')
             .eq('property_id', propertyId)
-            .in('status', ['confirmed', 'pending'])
-            .gte('end_date', startDate)
-            .lte('start_date', endDate);
+            .eq('status', 'confirmed')
+            .gt('end_date', normalizedStart)
+            .lt('start_date', normalizedEnd)
+            .limit(1);
 
         return {
             available: !data || data.length === 0,
-            error
+            error,
         };
     },
 
@@ -1229,9 +1590,32 @@ export const supabaseService = {
         data: import('@/types').Booking | null;
         error: any;
     }> {
+        const { validateUUID } = await import('@/utils/validation');
+
+        const normalizedStart = normalizeDateOnly(bookingData.startDate);
+        const normalizedEnd = normalizeDateOnly(bookingData.endDate);
+
+        if (!validateUUID(bookingData.userId)) {
+            return { data: null, error: { message: 'معرف المستخدم غير صالح' } };
+        }
+
+        if (!normalizedStart || !normalizedEnd) {
+            return { data: null, error: { message: 'صيغة التاريخ غير صالحة' } };
+        }
+
+        if (normalizedStart >= normalizedEnd) {
+            return { data: null, error: { message: 'تاريخ النهاية يجب أن يكون بعد تاريخ البداية' } };
+        }
+
+        const safeBookingData = {
+            ...bookingData,
+            startDate: normalizedStart,
+            endDate: normalizedEnd,
+        };
+
         if (IS_MOCK_MODE) {
             const mockBooking: import('@/types').Booking = {
-                ...bookingData,
+                ...safeBookingData,
                 id: `BK-${Date.now()}`,
                 createdAt: new Date().toISOString(),
             };
@@ -1241,24 +1625,24 @@ export const supabaseService = {
         const { data, error } = await supabase
             .from('bookings')
             .insert({
-                property_id: bookingData.propertyId,
-                user_id: bookingData.userId,
-                start_date: bookingData.startDate,
-                end_date: bookingData.endDate,
-                total_nights: bookingData.totalNights,
-                total_months: bookingData.totalMonths,
-                rental_type: bookingData.rentalType,
-                tenant_name: bookingData.tenantName,
-                tenant_phone: bookingData.tenantPhone,
-                tenant_email: bookingData.tenantEmail,
-                base_price: bookingData.basePrice,
-                service_fee: bookingData.serviceFee,
-                deposit_amount: bookingData.depositAmount,
-                total_amount: bookingData.totalAmount,
-                payment_method: bookingData.paymentMethod,
-                payment_status: bookingData.paymentStatus,
-                payment_proof: bookingData.paymentProof,
-                status: bookingData.status,
+                property_id: safeBookingData.propertyId,
+                user_id: safeBookingData.userId,
+                start_date: safeBookingData.startDate,
+                end_date: safeBookingData.endDate,
+                total_nights: safeBookingData.totalNights,
+                total_months: safeBookingData.totalMonths,
+                rental_type: safeBookingData.rentalType,
+                tenant_name: safeBookingData.tenantName,
+                tenant_phone: safeBookingData.tenantPhone,
+                tenant_email: safeBookingData.tenantEmail,
+                base_price: safeBookingData.basePrice,
+                service_fee: safeBookingData.serviceFee,
+                deposit_amount: safeBookingData.depositAmount,
+                total_amount: safeBookingData.totalAmount,
+                payment_method: safeBookingData.paymentMethod,
+                payment_status: safeBookingData.paymentStatus,
+                payment_proof: safeBookingData.paymentProof,
+                status: safeBookingData.status,
             })
             .select()
             .single();
@@ -1267,7 +1651,6 @@ export const supabaseService = {
             return { data: null, error };
         }
 
-        // تحويل أسماء الأعمدة من snake_case إلى camelCase
         const booking: import('@/types').Booking = {
             id: data.id,
             propertyId: data.property_id,
@@ -1294,10 +1677,6 @@ export const supabaseService = {
 
         return { data: booking, error: null };
     },
-
-    /**
-     * جلب حجوزات المستخدم
-     */
     async getUserBookingsLegacy(userId: string): Promise<{
         data: import('@/types').Booking[];
         error: any;
@@ -1319,7 +1698,7 @@ export const supabaseService = {
             return { data: [], error };
         }
 
-        // تحويل البيانات
+        // طھط­ظˆظٹظ„ ط§ظ„ط¨ظٹط§ظ†ط§طھ
         const bookings: import('@/types').Booking[] = (data || []).map((item: any) => ({
             id: item.id,
             propertyId: item.property_id,
@@ -1349,7 +1728,7 @@ export const supabaseService = {
     },
 
     /**
-     * جلب الحجوزات الواردة والصادرة (للمستأجر والمالك معاً)
+     * ط¬ظ„ط¨ ط§ظ„ط­ط¬ظˆط²ط§طھ ط§ظ„ظˆط§ط±ط¯ط© ظˆط§ظ„طµط§ط¯ط±ط© (ظ„ظ„ظ…ط³طھط£ط¬ط± ظˆط§ظ„ظ…ط§ظ„ظƒ ظ…ط¹ط§ظ‹)
      */
     async getUserBookings(userId: string): Promise<{ myBookings: any[], incomingRequests: any[], error: any }> {
         if (IS_MOCK_MODE) {
@@ -1362,8 +1741,8 @@ export const supabaseService = {
             const { data: myBookingsData, error: myError } = await supabase
                 .from('bookings')
                 .select(`
-                    id, property_id, start_date, end_date, total_amount, status, created_at,
-                    property:properties ( title, images, area, owner_name, owner_phone )
+                    id, property_id, user_id, start_date, end_date, total_amount, status, created_at,
+                    property:properties ( title, images, area, owner_id, owner_name, owner_phone )
                 `)
                 .eq('user_id', userId)
                 .order('created_at', { ascending: false });
@@ -1374,7 +1753,7 @@ export const supabaseService = {
             const { data: incomingRequestsData, error: incomingError } = await supabase
                 .from('bookings')
                 .select(`
-                    id, property_id, start_date, end_date, total_amount, status, created_at, tenant_name,
+                    id, property_id, user_id, start_date, end_date, total_amount, status, created_at, tenant_name,
                     property:properties!inner ( title, images, area, owner_id ),
                     user:profiles ( full_name, avatar_url )
                 `)
@@ -1395,7 +1774,7 @@ export const supabaseService = {
     },
 
     /**
-     * رفع إيصال الدفع
+     * ط±ظپط¹ ط¥ظٹطµط§ظ„ ط§ظ„ط¯ظپط¹
      */
     async uploadPaymentReceipt(
         bookingId: string,
@@ -1421,7 +1800,7 @@ export const supabaseService = {
             .from('payment-receipts')
             .getPublicUrl(fileName);
 
-        // تحديث الحجز بالإيصال
+        // طھط­ط¯ظٹط« ط§ظ„ط­ط¬ط² ط¨ط§ظ„ط¥ظٹطµط§ظ„
         await supabase
             .from('bookings')
             .update({ payment_proof: publicUrl })
@@ -1431,7 +1810,7 @@ export const supabaseService = {
     },
 
     /**
-     * جلب تفاصيل حجز محدد
+     * ط¬ظ„ط¨ طھظپط§طµظٹظ„ ط­ط¬ط² ظ…ط­ط¯ط¯
      */
     async getBookingById(bookingId: string): Promise<{
         data: import('@/types').Booking | null;
@@ -1481,11 +1860,47 @@ export const supabaseService = {
             user: data.user,
         };
 
+        try {
+            const { data: propertyOwner, error: propertyOwnerError } = await supabase
+                .from('properties')
+                .select('owner_id')
+                .eq('id', data.property_id)
+                .maybeSingle();
+
+            if (propertyOwnerError) {
+                throw propertyOwnerError;
+            }
+
+            if (propertyOwner?.owner_id) {
+                const conversationId = await this.createConversation({
+                    propertyId: data.property_id,
+                    buyerId: data.user_id,
+                    ownerId: propertyOwner.owner_id,
+                });
+
+                await this.sendMessage({
+                    conversationId,
+                    senderId: data.user_id,
+                    text: buildBookingSystemMessage(data.start_date, data.end_date),
+                    messageType: 'system',
+                    metadata: {
+                        type: 'booking_request',
+                        booking_id: data.id,
+                        start_date: data.start_date,
+                        end_date: data.end_date,
+                        text: buildBookingSystemMessage(data.start_date, data.end_date),
+                    },
+                });
+            }
+        } catch (conversationError) {
+            console.error('Error creating booking conversation:', conversationError);
+        }
+
         return { data: booking, error: null };
     },
 
     /**
-     * تحديث حالة الحجز
+     * طھط­ط¯ظٹط« ط­ط§ظ„ط© ط§ظ„ط­ط¬ط²
      */
     async updateBookingStatus(
         bookingId: string,

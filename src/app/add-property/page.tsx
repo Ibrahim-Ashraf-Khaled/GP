@@ -1,86 +1,365 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import dynamic from 'next/dynamic';
+import Image from 'next/image';
 import Link from 'next/link';
-import Navbar from '@/components/Navbar';
-import ProtectedRoute from '@/components/ProtectedRoute';
-import { AREAS, FEATURES, PropertyCategory, PriceUnit, CATEGORY_AR, PRICE_UNIT_AR } from '@/types';
-import { addProperty, getCurrentUser, addNotification, uploadImage } from '@/lib/storage';
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type InputHTMLAttributes } from 'react';
+import OwnerDetailsStep from '@/components/add-property/OwnerDetailsStep';
+import { useToast } from '@/components/ui/Toast';
+import { PROPERTY_FEATURES } from '@/config/features';
+import { useUser } from '@/hooks/useUser';
+import { addNotification, addProperty, deletePropertyImages, getCurrentUser, uploadPropertyImages } from '@/lib/storage';
+import {
+    AREAS,
+    CATEGORY_AR,
+    PRICE_UNIT_AR,
+    type PriceUnit,
+    type PropertyCategory,
+    type PropertyStatus,
+    type User,
+} from '@/types';
+
+const DynamicLocationPicker = dynamic(() => import('@/components/add-property/LocationPicker'), {
+    ssr: false,
+    loading: () => (
+        <div className="relative z-0 h-[350px] overflow-hidden rounded-2xl bg-gray-100 dark:bg-zinc-800">
+            <div className="absolute inset-0 animate-pulse bg-gradient-to-br from-gray-200 via-gray-100 to-gray-200 dark:from-zinc-800 dark:via-zinc-700 dark:to-zinc-800" />
+        </div>
+    ),
+});
+
+type InputFieldProps = InputHTMLAttributes<HTMLInputElement> & {
+    label: string;
+    error?: string;
+};
+
+type AddPropertyFormData = {
+    title: string;
+    description: string;
+    price: string;
+    priceUnit: PriceUnit;
+    category: PropertyCategory;
+    bedrooms: number;
+    bathrooms: number;
+    area: string;
+    floor: number;
+    features: string[];
+    address: string;
+    selectedArea: string;
+    ownerName: string;
+    ownerPhone: string;
+};
+
+type OwnerSource = {
+    id: string;
+    name: string;
+    phone: string;
+    isVerified: boolean;
+};
+
+const FALLBACK_OWNER = {
+    name: 'إبراهيم',
+    isVerified: false,
+} as const;
+
+const CATEGORIES: PropertyCategory[] = ['apartment', 'room', 'studio', 'villa', 'chalet'];
+const PRICE_UNITS: PriceUnit[] = ['day', 'week', 'month', 'season'];
+
+type StagedImage = {
+    id: string;
+    file: File;
+    previewUrl: string;
+};
+
+function createInitialFormData(owner?: Pick<OwnerSource, 'name' | 'phone'>): AddPropertyFormData {
+    return {
+        title: '',
+        description: '',
+        price: '',
+        priceUnit: 'day',
+        category: 'apartment',
+        bedrooms: 1,
+        bathrooms: 1,
+        area: '',
+        floor: 0,
+        features: [],
+        address: '',
+        selectedArea: '',
+        ownerName: owner?.name ?? '',
+        ownerPhone: owner?.phone ?? '',
+    };
+}
+
+function InputField({ label, error, className, ...props }: InputFieldProps) {
+    return (
+        <div className="space-y-2">
+            <label className="block text-sm font-bold text-gray-700 dark:text-gray-300">{label}</label>
+            <input
+                className={[
+                    'w-full rounded-xl border-2 bg-gray-50 p-4 text-gray-900 outline-none transition-all placeholder-gray-400 dark:bg-zinc-800 dark:text-white',
+                    error
+                        ? 'border-red-500/50 focus:border-red-500'
+                        : 'border-transparent focus:border-primary/50 focus:bg-white dark:focus:bg-black',
+                    className || '',
+                ].join(' ')}
+                {...props}
+            />
+            {error ? <p className="text-xs text-red-500">{error}</p> : null}
+        </div>
+    );
+}
 
 export default function AddPropertyPage() {
+    const { user: authUser } = useUser();
+    const { showToast } = useToast();
+    const hasEditedOwnerNameRef = useRef(false);
+
+    const [storedUser, setStoredUser] = useState<User | null>(null);
     const [step, setStep] = useState(1);
     const [loading, setLoading] = useState(false);
     const [uploading, setUploading] = useState(false);
     const [success, setSuccess] = useState(false);
     const [validationErrors, setValidationErrors] = useState<string[]>([]);
+    const [stagedImages, setStagedImages] = useState<StagedImage[]>([]);
+    const [imageError, setImageError] = useState<string | null>(null);
+    const [isDragging, setIsDragging] = useState(false);
+    const [selectedLocation, setSelectedLocation] = useState<{ lat: number; lng: number } | null>(null);
+    const [formData, setFormData] = useState<AddPropertyFormData>(() => createInitialFormData());
 
-    const [formData, setFormData] = useState({
-        title: '',
-        description: '',
-        price: '',
-        priceUnit: 'day' as PriceUnit,
-        category: 'apartment' as PropertyCategory,
-        bedrooms: 1,
-        bathrooms: 1,
-        area: '',
-        floor: 0,
-        features: [] as string[],
-        address: '',
-        selectedArea: '',
-        ownerName: '',
-        ownerPhone: '',
-    });
-
-    // Auto-fill owner information from current user
     useEffect(() => {
-        const user = getCurrentUser();
-        if (user) {
-            setFormData(prev => ({
-                ...prev,
-                ownerName: user.name,
-                ownerPhone: user.phone,
-            }));
-        }
+        setStoredUser(getCurrentUser());
     }, []);
 
-    const [images, setImages] = useState<string[]>([]);
+    useEffect(() => {
+        return () => {
+            stagedImages.forEach((image) => URL.revokeObjectURL(image.previewUrl));
+        };
+    }, [stagedImages]);
 
-    const categories: PropertyCategory[] = ['apartment', 'room', 'studio', 'villa', 'chalet'];
-    const priceUnits: PriceUnit[] = ['day', 'week', 'month', 'season'];
+    const actualUser = useMemo<OwnerSource | null>(() => {
+        if (authUser) {
+            return {
+                id: authUser.id,
+                name: authUser.name,
+                phone: authUser.phone,
+                isVerified: authUser.isVerified,
+            };
+        }
 
-    const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const files = e.target.files;
-        if (!files) return;
+        if (storedUser) {
+            return {
+                id: storedUser.id,
+                name: storedUser.name,
+                phone: storedUser.phone,
+                isVerified: storedUser.isVerified,
+            };
+        }
 
-        setUploading(true);
-        try {
-            const uploadPromises = Array.from(files).map(file => uploadImage(file));
-            const distinctUrls = await Promise.all(uploadPromises);
-            setImages(prev => [...prev, ...distinctUrls]);
-        } catch (error) {
-            console.error('Upload failed:', error);
-            alert('حدث خطأ أثناء رفع الصور. يرجى المحاولة مرة أخرى.');
-        } finally {
-            setUploading(false);
+        return null;
+    }, [authUser, storedUser]);
+
+    const ownerDetailsUser = useMemo(
+        () =>
+            actualUser
+                ? {
+                      name: actualUser.name,
+                      isVerified: actualUser.isVerified,
+                  }
+                : FALLBACK_OWNER,
+        [actualUser],
+    );
+
+    useEffect(() => {
+        if (!actualUser?.name.trim()) {
+            return;
+        }
+
+        setFormData((prev) => {
+            if (actualUser.isVerified) {
+                if (prev.ownerName === actualUser.name) {
+                    return prev;
+                }
+
+                return { ...prev, ownerName: actualUser.name };
+            }
+
+            if (hasEditedOwnerNameRef.current || prev.ownerName.trim()) {
+                return prev;
+            }
+
+            if (prev.ownerName === actualUser.name) {
+                return prev;
+            }
+
+            return { ...prev, ownerName: actualUser.name };
+        });
+    }, [actualUser?.name, actualUser?.isVerified]);
+
+    useEffect(() => {
+        if (!actualUser?.phone.trim()) {
+            return;
+        }
+
+        setFormData((prev) => {
+            if (prev.ownerPhone.trim()) {
+                return prev;
+            }
+
+            return { ...prev, ownerPhone: actualUser.phone };
+        });
+    }, [actualUser?.phone]);
+
+    const validateFiles = (files: FileList): { validFiles: File[]; error: string | null } => {
+        const validFiles: File[] = [];
+        const imageMimeTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
+        const maxFileSize = 5 * 1024 * 1024;
+        const maxTotalImages = 6;
+
+        for (let i = 0; i < files.length; i++) {
+            const file = files[i];
+
+            if (!imageMimeTypes.includes(file.type)) {
+                return { validFiles: [], error: 'يجب اختيار ملفات صور فقط' };
+            }
+
+            if (file.size > maxFileSize) {
+                return { validFiles: [], error: 'حجم الملف يتجاوز 5 ميجابايت' };
+            }
+
+            validFiles.push(file);
+        }
+
+        if (stagedImages.length + validFiles.length > maxTotalImages) {
+            return { validFiles: [], error: 'الحد الأقصى 6 صور' };
+        }
+
+        return { validFiles, error: null };
+    };
+
+    const handleFileSelect = (files: FileList) => {
+        setImageError(null);
+        const { validFiles, error } = validateFiles(files);
+
+        if (error) {
+            setImageError(error);
+            return;
+        }
+
+        const newImages: StagedImage[] = validFiles.map((file) => ({
+            id: `${Date.now()}-${Math.random().toString(36).substring(2)}`,
+            file,
+            previewUrl: URL.createObjectURL(file),
+        }));
+
+        setStagedImages((prev) => [...prev, ...newImages]);
+    };
+
+    const handleImageUpload = (event: ChangeEvent<HTMLInputElement>) => {
+        const files = event.target.files;
+        if (!files || files.length === 0) {
+            return;
+        }
+
+        handleFileSelect(files);
+        event.target.value = '';
+    };
+
+    const handleDragOver = (e: React.DragEvent) => {
+        e.preventDefault();
+        if (!uploading) {
+            setIsDragging(true);
         }
     };
 
-    const removeImage = (index: number) => {
-        setImages(images.filter((_, i) => i !== index));
+    const handleDragLeave = (e: React.DragEvent) => {
+        e.preventDefault();
+        setIsDragging(false);
     };
 
-    const toggleFeature = (feature: string) => {
-        if (formData.features.includes(feature)) {
-            setFormData({
-                ...formData,
-                features: formData.features.filter(f => f !== feature),
-            });
-        } else {
-            setFormData({
-                ...formData,
-                features: [...formData.features, feature],
-            });
+    const handleDrop = (e: React.DragEvent) => {
+        e.preventDefault();
+        setIsDragging(false);
+
+        if (uploading) {
+            return;
         }
+
+        const files = e.dataTransfer.files;
+        if (files.length === 0) {
+            return;
+        }
+
+        handleFileSelect(files);
+    };
+
+    const removeImage = (id: string) => {
+        setStagedImages((prev) => {
+            const imageToRemove = prev.find((img) => img.id === id);
+            if (imageToRemove) {
+                URL.revokeObjectURL(imageToRemove.previewUrl);
+            }
+            return prev.filter((img) => img.id !== id);
+        });
+    };
+
+    const toggleFeature = (featureId: string) => {
+        setFormData((prev) => ({
+            ...prev,
+            features: prev.features.includes(featureId)
+                ? prev.features.filter((item) => item !== featureId)
+                : [...prev.features, featureId],
+        }));
+    };
+
+    const getStepErrors = () => {
+        const errors: string[] = [];
+
+        switch (step) {
+            case 1:
+                if (!formData.title.trim()) errors.push('title');
+                if (!formData.price.trim()) errors.push('price');
+                break;
+            case 2:
+                if (!formData.description.trim()) errors.push('description');
+                break;
+            case 3:
+                if (!formData.selectedArea) errors.push('selectedArea');
+                if (!formData.address.trim()) errors.push('address');
+                break;
+            case 4:
+                if (!formData.ownerName.trim()) errors.push('ownerName');
+                if (!formData.ownerPhone.trim()) errors.push('ownerPhone');
+                break;
+            default:
+                break;
+        }
+
+        return errors;
+    };
+
+    const handleNextStep = () => {
+        const errors = getStepErrors();
+
+        if (errors.length > 0) {
+            setValidationErrors(errors);
+            return;
+        }
+
+        setStep((prev) => prev + 1);
+        setValidationErrors([]);
+    };
+
+    const resetForm = () => {
+        stagedImages.forEach((image) => URL.revokeObjectURL(image.previewUrl));
+        hasEditedOwnerNameRef.current = false;
+        setStep(1);
+        setSuccess(false);
+        setStagedImages([]);
+        setImageError(null);
+        setIsDragging(false);
+        setSelectedLocation(null);
+        setValidationErrors([]);
+        setFormData(createInitialFormData(actualUser ?? undefined));
     };
 
     const handleSubmit = async () => {
@@ -88,163 +367,94 @@ export default function AddPropertyPage() {
         setValidationErrors([]);
 
         try {
-            const user = getCurrentUser();
-
-            if (!user) {
-                alert('يجب تسجيل الدخول أولاً');
+            if (!actualUser) {
+                showToast('يجب تسجيل الدخول أولاً.', 'error');
                 return;
             }
 
-            // التحقق من وجود صور
-            if (images.length === 0) {
-                alert('يرجى إضافة صورة واحدة على الأقل');
-                setLoading(false);
+            if (stagedImages.length === 0) {
+                showToast('يرجى إضافة صورة واحدة على الأقل.', 'error');
                 return;
             }
 
-            // تجهيز العقار (الصور مرفوعة بالفعل)
+            setUploading(true);
+
+            const imageUrls = await uploadPropertyImages(stagedImages.map((img) => img.file));
+
             const propertyToAdd = {
                 title: formData.title,
                 description: formData.description,
                 price: Number(formData.price),
                 priceUnit: formData.priceUnit,
                 category: formData.category,
-                status: 'available',
-                images: images, // الصور المرفوعة من handleImageUpload
+                status: 'available' as PropertyStatus,
+                images: imageUrls,
                 location: {
-                    lat: 31.4431,
-                    lng: 31.5344,
+                    lat: selectedLocation?.lat ?? null,
+                    lng: selectedLocation?.lng ?? null,
                     address: formData.address,
                     area: formData.selectedArea,
                 },
                 ownerPhone: formData.ownerPhone,
-                ownerId: user.id,
+                ownerId: actualUser.id,
                 ownerName: formData.ownerName,
                 features: formData.features,
                 bedrooms: formData.bedrooms,
                 bathrooms: formData.bathrooms,
-                area: Number(formData.area),
+                area: Number(formData.area) || 0,
                 floor: formData.floor,
                 isVerified: false,
             };
 
-            // حفظ العقار
-            const newProperty = await addProperty(propertyToAdd);
+            try {
+                const newProperty = await addProperty(propertyToAdd);
 
-            // إضافة إشعار
-            addNotification({
-                userId: user.id,
-                title: 'تم إضافة عقارك بنجاح!',
-                message: `عقارك "${formData.title}" قيد المراجعة من الإدارة.`,
-                type: 'success',
-                link: `/property/${newProperty.id}`,
-            });
+                addNotification({
+                    userId: actualUser.id,
+                    title: 'تمت إضافة عقارك بنجاح!',
+                    message: `عقارك "${formData.title}" قيد المراجعة من الإدارة.`,
+                    type: 'success',
+                    link: `/property/${newProperty.id}`,
+                });
 
-            setSuccess(true);
+                setSuccess(true);
 
-            // Redirect بعد 2 ثانية
-            setTimeout(() => {
-                window.location.href = '/my-properties';
-            }, 2000);
-
+                setTimeout(() => {
+                    window.location.href = '/my-properties';
+                }, 2000);
+            } catch (propertyError) {
+                await deletePropertyImages(imageUrls);
+                throw propertyError;
+            }
         } catch (error) {
             console.error('Error adding property:', error);
-            alert('حدث خطأ أثناء إضافة العقار. يرجى المحاولة مرة أخرى.');
+            showToast('حدث خطأ أثناء إضافة العقار. يرجى المحاولة مرة أخرى.', 'error');
         } finally {
+            setUploading(false);
             setLoading(false);
         }
     };
 
-    const getStepErrors = () => {
-        const errors: string[] = [];
-        switch (step) {
-            case 1:
-                if (!formData.title) errors.push('title');
-                if (!formData.price) errors.push('price');
-                break;
-            case 2:
-                if (!formData.description) errors.push('description');
-                break;
-            case 3:
-                if (!formData.selectedArea) errors.push('selectedArea');
-                if (!formData.address) errors.push('address');
-                break;
-            case 4:
-                if (!formData.ownerName) errors.push('ownerName');
-                if (!formData.ownerPhone) errors.push('ownerPhone');
-                break;
-        }
-        return errors;
-    };
-
-    const handleNextStep = () => {
-        const errors = getStepErrors();
-        if (errors.length === 0) {
-            setStep(step + 1);
-            setValidationErrors([]);
-        } else {
-            setValidationErrors(errors);
-        }
-    };
-
-    // Helper Input Component for consistency
-    const InputField = ({ label, error, ...props }: any) => (
-        <div className="space-y-2">
-            <label className="block text-sm font-bold text-gray-700 dark:text-gray-300">
-                {label}
-            </label>
-            <input
-                className={`w-full p-4 rounded-xl bg-gray-50 dark:bg-zinc-800 border-2 transition-all outline-none text-gray-900 dark:text-white placeholder-gray-400
-                ${error
-                        ? 'border-red-500/50 focus:border-red-500'
-                        : 'border-transparent focus:border-primary/50 focus:bg-white dark:focus:bg-black'
-                    }`}
-                {...props}
-            />
-            {error && <p className="text-red-500 text-xs mt-1">{error}</p>}
-        </div>
-    );
-
     if (success) {
         return (
-            <div className="fixed inset-0 bg-black/80 backdrop-blur-xl z-50 flex items-center justify-center p-4 animate-fadeIn">
-                <div className="bg-white dark:bg-zinc-900 rounded-[2.5rem] p-8 max-w-md w-full text-center shadow-2xl border border-white/20">
-                    <div className="w-24 h-24 mx-auto mb-6 rounded-full bg-green-500/10 flex items-center justify-center">
-                        <span className="material-symbols-outlined text-6xl text-green-500 animate-pulse">check_circle</span>
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-xl">
+                <div className="w-full max-w-md rounded-[2.5rem] border border-white/20 bg-white p-8 text-center shadow-2xl dark:bg-zinc-900">
+                    <div className="mx-auto mb-6 flex h-24 w-24 items-center justify-center rounded-full bg-green-500/10">
+                        <span className="material-symbols-outlined animate-pulse text-6xl text-green-500">check_circle</span>
                     </div>
-                    <h1 className="text-2xl font-bold mb-4 text-gray-900 dark:text-white">تم إضافة العقار بنجاح!</h1>
-                    <p className="text-gray-500 dark:text-gray-400 mb-8">سيتم مراجعة العقار من الإدارة قبل نشره للعامة.</p>
+                    <h1 className="mb-4 text-2xl font-bold text-gray-900 dark:text-white">تمت إضافة العقار بنجاح!</h1>
+                    <p className="mb-8 text-gray-500 dark:text-gray-400">سيتم مراجعة العقار من الإدارة قبل نشره للعامة.</p>
                     <div className="flex flex-col gap-3">
                         <Link
                             href="/"
-                            className="w-full py-4 bg-primary text-white font-bold rounded-xl shadow-lg shadow-primary/30 hover:shadow-primary/50 transition-all"
+                            className="w-full rounded-xl bg-primary py-4 font-bold text-white shadow-lg shadow-primary/30 transition-all hover:shadow-primary/50"
                         >
                             العودة للرئيسية
                         </Link>
                         <button
-                            onClick={() => {
-                                setSuccess(false);
-                                setStep(1);
-                                const user = getCurrentUser();
-                                setFormData({
-                                    title: '',
-                                    description: '',
-                                    price: '',
-                                    priceUnit: 'day',
-                                    category: 'apartment',
-                                    bedrooms: 1,
-                                    bathrooms: 1,
-                                    area: '',
-                                    floor: 0,
-                                    features: [],
-                                    address: '',
-                                    selectedArea: '',
-                                    ownerName: user?.name || '',
-                                    ownerPhone: user?.phone || '',
-                                });
-                                setImages([]);
-                            }}
-                            className="w-full py-4 bg-gray-100 dark:bg-zinc-800 text-gray-900 dark:text-white font-bold rounded-xl hover:bg-gray-200 dark:hover:bg-zinc-700 transition-all"
+                            type="button"
+                            onClick={resetForm}
+                            className="w-full rounded-xl bg-gray-100 py-4 font-bold text-gray-900 transition-all hover:bg-gray-200 dark:bg-zinc-800 dark:text-white dark:hover:bg-zinc-700"
                         >
                             إضافة عقار آخر
                         </button>
@@ -255,66 +465,72 @@ export default function AddPropertyPage() {
     }
 
     return (
-        <main className="min-h-screen bg-gray-50 dark:bg-black pb-32">
-            {/* Header */}
-            <header className="sticky top-0 z-40 bg-white/80 dark:bg-black/80 backdrop-blur-xl border-b border-gray-200 dark:border-white/10">
-                <div className="max-w-2xl mx-auto px-4 py-4">
-                    <div className="flex items-center justify-between mb-6">
-                        <Link href="/" className="text-gray-500 hover:text-gray-900 dark:hover:text-white transition-colors">
+        <main className="min-h-screen bg-gray-50 pb-32 dark:bg-black">
+            <header className="sticky top-0 z-40 border-b border-gray-200 bg-white/80 backdrop-blur-xl dark:border-white/10 dark:bg-black/80">
+                <div className="mx-auto max-w-2xl px-4 py-4">
+                    <div className="mb-6 flex items-center justify-between">
+                        <Link href="/" className="text-gray-500 transition-colors hover:text-gray-900 dark:hover:text-white">
                             <span className="material-symbols-outlined rtl:rotate-180">arrow_back</span>
                         </Link>
                         <h1 className="text-lg font-bold text-gray-900 dark:text-white">إضافة عقار جديد</h1>
                         <div className="w-6" />
                     </div>
 
-                    {/* Stepper */}
                     <div className="flex gap-2">
-                        {[1, 2, 3, 4].map(s => (
+                        {[1, 2, 3, 4].map((item) => (
                             <div
-                                key={s}
-                                className={`flex-1 h-1.5 rounded-full transition-all duration-500 ${s <= step
-                                    ? 'bg-primary'
-                                    : 'bg-gray-200 dark:bg-zinc-800'
-                                    }`}
+                                key={item}
+                                className={`h-1.5 flex-1 rounded-full transition-all duration-500 ${
+                                    item <= step ? 'bg-primary' : 'bg-gray-200 dark:bg-zinc-800'
+                                }`}
                             />
                         ))}
                     </div>
                 </div>
             </header>
 
-            <section className="max-w-2xl mx-auto px-4 mt-8">
-                <div className="bg-white dark:bg-zinc-900 rounded-[2rem] p-6 shadow-sm border border-gray-100 dark:border-white/5">
-
-                    {/* Step 1: Basic Info */}
-                    {step === 1 && (
-                        <div className="space-y-6 animate-fadeIn">
-                            <div className="text-center mb-8">
-                                <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">المعلومات الأساسية</h2>
-                                <p className="text-gray-500 dark:text-gray-400">ابدأ بإدخال التفاصيل الرئيسية لعقارك</p>
+            <section className="mx-auto mt-8 max-w-2xl px-4">
+                <div className="rounded-[2rem] border border-gray-100 bg-white p-6 shadow-sm dark:border-white/5 dark:bg-zinc-900">
+                    {step === 1 ? (
+                        <div className="animate-fadeIn space-y-6">
+                            <div className="mb-8 text-center">
+                                <h2 className="mb-2 text-2xl font-bold text-gray-900 dark:text-white">المعلومات الأساسية</h2>
+                                <p className="text-gray-500 dark:text-gray-400">ابدأ بإدخال التفاصيل الرئيسية لعقارك.</p>
                             </div>
 
                             <InputField
                                 label="عنوان العقار *"
                                 placeholder="مثال: شقة فاخرة بإطلالة بحرية"
                                 value={formData.title}
-                                onChange={(e: any) => setFormData({ ...formData, title: e.target.value })}
+                                onChange={(event) =>
+                                    setFormData((prev) => ({
+                                        ...prev,
+                                        title: event.target.value,
+                                    }))
+                                }
                                 error={validationErrors.includes('title') ? 'هذا الحقل مطلوب' : undefined}
                             />
 
                             <div className="space-y-2">
                                 <label className="block text-sm font-bold text-gray-700 dark:text-gray-300">نوع العقار *</label>
                                 <div className="grid grid-cols-3 gap-3">
-                                    {categories.map(cat => (
+                                    {CATEGORIES.map((category) => (
                                         <button
-                                            key={cat}
+                                            key={category}
                                             type="button"
-                                            onClick={() => setFormData({ ...formData, category: cat })}
-                                            className={`p-3 rounded-xl text-sm font-bold transition-all border-2 ${formData.category === cat
-                                                ? 'bg-primary text-white border-primary shadow-lg shadow-primary/20'
-                                                : 'bg-gray-50 dark:bg-zinc-800 text-gray-600 dark:text-gray-400 border-transparent hover:bg-gray-100 dark:hover:bg-zinc-700'
-                                                }`}
+                                            onClick={() =>
+                                                setFormData((prev) => ({
+                                                    ...prev,
+                                                    category,
+                                                }))
+                                            }
+                                            className={`rounded-xl border-2 p-3 text-sm font-bold transition-all ${
+                                                formData.category === category
+                                                    ? 'border-primary bg-primary text-white shadow-lg shadow-primary/20'
+                                                    : 'border-transparent bg-gray-50 text-gray-600 hover:bg-gray-100 dark:bg-zinc-800 dark:text-gray-400 dark:hover:bg-zinc-700'
+                                            }`}
                                         >
-                                            {CATEGORY_AR[cat]}
+                                            {CATEGORY_AR[category]}
                                         </button>
                                     ))}
                                 </div>
@@ -326,66 +542,119 @@ export default function AddPropertyPage() {
                                     type="number"
                                     placeholder="0"
                                     value={formData.price}
-                                    onChange={(e: any) => setFormData({ ...formData, price: e.target.value })}
+                                    onChange={(event) =>
+                                        setFormData((prev) => ({
+                                            ...prev,
+                                            price: event.target.value,
+                                        }))
+                                    }
                                     error={validationErrors.includes('price') ? 'مطلوب' : undefined}
                                 />
+
                                 <div className="space-y-2">
                                     <label className="block text-sm font-bold text-gray-700 dark:text-gray-300">لكل</label>
                                     <div className="relative">
                                         <select
+                                            dir="rtl"
                                             value={formData.priceUnit}
-                                            onChange={(e) => setFormData({ ...formData, priceUnit: e.target.value as typeof formData.priceUnit })}
-                                            className="w-full p-4 rounded-xl bg-gray-50 dark:bg-zinc-800 border-2 border-transparent focus:border-primary/50 outline-none text-gray-900 dark:text-white appearance-none"
+                                            onChange={(event) =>
+                                                setFormData((prev) => ({
+                                                    ...prev,
+                                                    priceUnit: event.target.value as PriceUnit,
+                                                }))
+                                            }
+                                            className="w-full appearance-none rounded-xl border-2 border-transparent bg-gray-50 p-4 pl-12 pr-4 text-right text-gray-900 outline-none [text-align-last:right] transition-all focus:border-primary/50 dark:bg-zinc-800 dark:text-white dark:focus:bg-black"
                                         >
-                                            {priceUnits.map(unit => (
-                                                <option key={unit} value={unit}>{PRICE_UNIT_AR[unit]}</option>
+                                            {PRICE_UNITS.map((unit) => (
+                                                <option key={unit} value={unit}>
+                                                    {PRICE_UNIT_AR[unit]}
+                                                </option>
                                             ))}
                                         </select>
-                                        <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">expand_more</span>
+                                        <span className="material-symbols-outlined pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
+                                            expand_more
+                                        </span>
                                     </div>
                                 </div>
                             </div>
 
                             <div className="space-y-3">
                                 <label className="block text-sm font-bold text-gray-700 dark:text-gray-300">
-                                    صور العقار <span className="text-gray-400 font-normal text-xs">(حتى 6 صور)</span>
+                                    صور العقار <span className="text-xs font-normal text-gray-400">(حتى 6 صور)</span>
                                 </label>
-                                <div className="grid grid-cols-3 gap-3">
-                                    {images.map((img, idx) => (
-                                        <div key={idx} className="relative aspect-square rounded-2xl overflow-hidden group">
-                                            <img src={img} alt="" className="w-full h-full object-cover" />
-                                            <button
-                                                onClick={() => removeImage(idx)}
-                                                className="absolute top-1 right-1 size-6 rounded-full bg-red-500 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                                            >
-                                                <span className="material-symbols-outlined text-[14px]">close</span>
-                                            </button>
+
+                                {stagedImages.length === 0 ? (
+                                    <label
+                                        className={`group flex h-52 w-full cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed bg-gray-50 transition-all dark:bg-zinc-800 ${
+                                            isDragging
+                                                ? 'border-primary bg-primary/5'
+                                                : 'border-gray-300 hover:border-primary hover:bg-primary/5 dark:border-zinc-700'
+                                        } ${uploading ? 'pointer-events-none opacity-50' : ''}`}
+                                        onDragOver={handleDragOver}
+                                        onDragLeave={handleDragLeave}
+                                        onDrop={handleDrop}
+                                    >
+                                        <span className="material-symbols-outlined mb-2 text-4xl text-gray-400 transition-colors group-hover:text-primary">
+                                            add_a_photo
+                                        </span>
+                                        <span className="text-sm font-bold text-gray-500 transition-colors group-hover:text-primary dark:text-gray-400">
+                                            إضافة صور (حتى 6)
+                                        </span>
+                                        <span className="mt-1 text-xs text-gray-400">اسحب وأفلت أو اضغط للاختيار</span>
+                                        <input type="file" accept="image/*" multiple onChange={handleImageUpload} disabled={uploading} className="hidden" />
+                                    </label>
+                                ) : (
+                                    <div className="space-y-3">
+                                        {imageError && (
+                                            <div className="flex items-center gap-2 rounded-lg bg-red-50 p-3 text-sm text-red-600 dark:bg-red-950/20 dark:text-red-400">
+                                                <span className="material-symbols-outlined text-[18px]">error</span>
+                                                <span>{imageError}</span>
+                                            </div>
+                                        )}
+                                        <div className="grid grid-cols-3 gap-3">
+                                            {stagedImages.map((image) => (
+                                                <div key={image.id} className="group relative aspect-square overflow-hidden rounded-2xl">
+                                                    <Image src={image.previewUrl} alt="" fill className="object-cover" sizes="(max-width: 768px) 33vw, 160px" />
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => removeImage(image.id)}
+                                                        disabled={uploading}
+                                                        className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-red-500 text-white opacity-0 transition-opacity group-hover:opacity-100 disabled:pointer-events-none disabled:opacity-50"
+                                                    >
+                                                        <span className="material-symbols-outlined text-[14px]">close</span>
+                                                    </button>
+                                                </div>
+                                            ))}
+                                            {stagedImages.length < 6 && !uploading && (
+                                                <label
+                                                    className={`group flex aspect-square cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed bg-gray-50 transition-all dark:bg-zinc-800 ${
+                                                        isDragging
+                                                            ? 'border-primary bg-primary/5'
+                                                            : 'border-gray-300 hover:border-primary hover:bg-primary/5 dark:border-zinc-700'
+                                                    }`}
+                                                    onDragOver={handleDragOver}
+                                                    onDragLeave={handleDragLeave}
+                                                    onDrop={handleDrop}
+                                                >
+                                                    <span className="material-symbols-outlined mb-1 text-3xl text-gray-400 transition-colors group-hover:text-primary">
+                                                        add_a_photo
+                                                    </span>
+                                                    <span className="text-xs font-bold text-gray-400 transition-colors group-hover:text-primary">إضافة</span>
+                                                    <input type="file" accept="image/*" multiple onChange={handleImageUpload} disabled={uploading} className="hidden" />
+                                                </label>
+                                            )}
                                         </div>
-                                    ))}
-                                    {images.length < 6 && (
-                                        <label className="aspect-square rounded-2xl bg-gray-50 dark:bg-zinc-800 border-2 border-dashed border-gray-300 dark:border-zinc-700 flex flex-col items-center justify-center cursor-pointer hover:border-primary hover:bg-primary/5 transition-all group">
-                                            <span className="material-symbols-outlined text-gray-400 group-hover:text-primary transition-colors text-3xl mb-1">add_a_photo</span>
-                                            <span className="text-xs text-gray-400 group-hover:text-primary font-bold">إضافة</span>
-                                            <input
-                                                type="file"
-                                                accept="image/*"
-                                                multiple
-                                                onChange={handleImageUpload}
-                                                className="hidden"
-                                            />
-                                        </label>
-                                    )}
-                                </div>
+                                    </div>
+                                )}
                             </div>
                         </div>
-                    )}
+                    ) : null}
 
-                    {/* Step 2: Details */}
-                    {step === 2 && (
-                        <div className="space-y-6 animate-fadeIn">
-                            <div className="text-center mb-8">
-                                <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">تفاصيل العقار</h2>
-                                <p className="text-gray-500 dark:text-gray-400">صف عقارك بدقة لجذب المستأجرين</p>
+                    {step === 2 ? (
+                        <div className="animate-fadeIn space-y-6">
+                            <div className="mb-8 text-center">
+                                <h2 className="mb-2 text-2xl font-bold text-gray-900 dark:text-white">تفاصيل العقار</h2>
+                                <p className="text-gray-500 dark:text-gray-400">صف عقارك بدقة لجذب المستأجرين.</p>
                             </div>
 
                             <div className="space-y-2">
@@ -393,138 +662,310 @@ export default function AddPropertyPage() {
                                 <textarea
                                     placeholder="اكتب وصفاً تفصيلياً للعقار..."
                                     value={formData.description}
-                                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                                    className={`w-full p-4 rounded-xl bg-gray-50 dark:bg-zinc-800 border-2 transition-all outline-none text-gray-900 dark:text-white min-h-[150px] resize-none
-                                    ${validationErrors.includes('description') ? 'border-red-500/50' : 'border-transparent focus:border-primary/50 focus:bg-white dark:focus:bg-black'}`}
+                                    onChange={(event) =>
+                                        setFormData((prev) => ({
+                                            ...prev,
+                                            description: event.target.value,
+                                        }))
+                                    }
+                                    className={`min-h-[150px] w-full resize-none rounded-xl border-2 bg-gray-50 p-4 text-gray-900 outline-none transition-all dark:bg-zinc-800 dark:text-white ${
+                                        validationErrors.includes('description')
+                                            ? 'border-red-500/50'
+                                            : 'border-transparent focus:border-primary/50 focus:bg-white dark:focus:bg-black'
+                                    }`}
+                                />
+                                <div className="flex justify-between text-xs text-gray-500">
+                                    <span>{formData.description.length} حرف</span>
+                                    <span>يفضل 50+ حرف</span>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <InputField
+                                    label="عدد الغرف"
+                                    type="number"
+                                    min={0}
+                                    value={formData.bedrooms}
+                                    onChange={(event) =>
+                                        setFormData((prev) => ({
+                                            ...prev,
+                                            bedrooms: Number(event.target.value) || 0,
+                                        }))
+                                    }
+                                />
+                                <InputField
+                                    label="عدد الحمامات"
+                                    type="number"
+                                    min={0}
+                                    value={formData.bathrooms}
+                                    onChange={(event) =>
+                                        setFormData((prev) => ({
+                                            ...prev,
+                                            bathrooms: Number(event.target.value) || 0,
+                                        }))
+                                    }
                                 />
                             </div>
 
-                        </div>
-                    )}
+                            <div className="grid grid-cols-2 gap-4">
+                                <InputField
+                                    label="المساحة (م²)"
+                                    type="number"
+                                    min={0}
+                                    placeholder="مثال: 120"
+                                    value={formData.area}
+                                    onChange={(event) =>
+                                        setFormData((prev) => ({
+                                            ...prev,
+                                            area: event.target.value,
+                                        }))
+                                    }
+                                />
+                                <InputField
+                                    label="الدور"
+                                    type="number"
+                                    placeholder="مثال: 3"
+                                    value={formData.floor}
+                                    onChange={(event) =>
+                                        setFormData((prev) => ({
+                                            ...prev,
+                                            floor: Number(event.target.value) || 0,
+                                        }))
+                                    }
+                                />
+                            </div>
 
-                    {/* Step 3: Location */}
-                    {step === 3 && (
-                        <div className="space-y-6 animate-fadeIn">
-                            <div className="text-center mb-8">
-                                <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">الموقع</h2>
-                                <p className="text-gray-500 dark:text-gray-400">أين يقع عقارك؟</p>
+                            <div className="space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-300">
+                                        المميزات والخدمات
+                                        <span className="ms-2 text-gray-400">
+                                            ({formData.features.length}/{PROPERTY_FEATURES.length})
+                                        </span>
+                                    </label>
+
+                                    {formData.features.length > 0 ? (
+                                        <button
+                                            type="button"
+                                            onClick={() =>
+                                                setFormData((prev) => ({
+                                                    ...prev,
+                                                    features: [],
+                                                }))
+                                            }
+                                            className="text-xs font-bold text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                                        >
+                                            مسح الكل
+                                        </button>
+                                    ) : null}
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                                    {PROPERTY_FEATURES.map((feature) => {
+                                        const active = formData.features.includes(feature.id);
+
+                                        return (
+                                            <button
+                                                key={feature.id}
+                                                type="button"
+                                                aria-pressed={active}
+                                                onClick={() => toggleFeature(feature.id)}
+                                                className={[
+                                                    'select-none rounded-xl border-2 p-3 text-sm font-bold transition-all',
+                                                    active
+                                                        ? 'border-primary bg-primary text-white shadow-lg shadow-primary/20'
+                                                        : 'border-transparent bg-gray-50 text-gray-700 hover:bg-gray-100 dark:bg-zinc-800 dark:text-gray-300 dark:hover:bg-zinc-700',
+                                                ].join(' ')}
+                                            >
+                                                <span className="flex items-center gap-2">
+                                                    <span className="material-symbols-outlined text-[18px]">{feature.icon}</span>
+                                                    <span>{feature.label}</span>
+                                                </span>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+
+                                <p className="text-xs text-gray-500 dark:text-gray-400">
+                                    اختر المميزات الموجودة فعلاً، لأن ذلك يرفع جودة الإعلان ويزيد ثقة المستأجرين.
+                                </p>
+                            </div>
+                        </div>
+                    ) : null}
+
+                    {step === 3 ? (
+                        <div className="animate-fadeIn space-y-6">
+                            <div className="mb-8 text-center">
+                                <h2 className="mb-2 text-2xl font-bold text-gray-900 dark:text-white">الموقع</h2>
+                                <p className="text-gray-500 dark:text-gray-400">حدد المنطقة والعنوان والموقع التقريبي للعقار.</p>
                             </div>
 
                             <div className="space-y-2">
                                 <label className="block text-sm font-bold text-gray-700 dark:text-gray-300">المنطقة *</label>
                                 <div className="relative">
                                     <select
+                                        dir="rtl"
                                         value={formData.selectedArea}
-                                        onChange={(e) => setFormData({ ...formData, selectedArea: e.target.value })}
-                                        className={`w-full p-4 rounded-xl bg-gray-50 dark:bg-zinc-800 border-2 outline-none text-gray-900 dark:text-white appearance-none transition-all
-                                        ${validationErrors.includes('selectedArea') ? 'border-red-500/50' : 'border-transparent focus:border-primary/50'}`}
+                                        onChange={(event) =>
+                                            setFormData((prev) => ({
+                                                ...prev,
+                                                selectedArea: event.target.value,
+                                            }))
+                                        }
+                                        className={`w-full appearance-none rounded-xl border-2 bg-gray-50 p-4 pl-12 pr-4 text-right outline-none [text-align-last:right] transition-all ${
+                                            !formData.selectedArea ? 'text-gray-400' : 'text-gray-900 dark:text-white'
+                                        } ${
+                                            validationErrors.includes('selectedArea')
+                                                ? 'border-red-500/50'
+                                                : 'border-transparent focus:border-primary/50'
+                                        } dark:bg-zinc-800`}
                                     >
                                         <option value="">اختر المنطقة</option>
-                                        {AREAS.map(area => (
-                                            <option key={area} value={area}>{area}</option>
+                                        {AREAS.map((area) => (
+                                            <option key={area} value={area}>
+                                                {area}
+                                            </option>
                                         ))}
                                     </select>
-                                    <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">location_on</span>
+                                    <span className="material-symbols-outlined pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
+                                        expand_more
+                                    </span>
                                 </div>
                             </div>
 
                             <InputField
                                 label="العنوان التفصيلي *"
-                                placeholder="مثال: شارع البحر، بجوار مسجد..."
+                                placeholder="مثال: شارع البحر، بجوار المسجد..."
                                 value={formData.address}
-                                onChange={(e: any) => setFormData({ ...formData, address: e.target.value })}
+                                onChange={(event) =>
+                                    setFormData((prev) => ({
+                                        ...prev,
+                                        address: event.target.value,
+                                    }))
+                                }
                                 error={validationErrors.includes('address') ? 'مطلوب' : undefined}
                             />
 
-                            <div className="h-48 rounded-2xl bg-gray-100 dark:bg-zinc-800 border-2 border-dashed border-gray-300 dark:border-zinc-700 flex flex-col items-center justify-center text-gray-400">
-                                <span className="material-symbols-outlined text-4xl mb-2">map</span>
-                                <p className="text-sm">سيتم إضافة الخريطة التفاعلية قريباً</p>
+                            <div className="rounded-2xl border border-blue-100 bg-blue-50/60 p-4 text-sm text-blue-800 dark:border-blue-900/30 dark:bg-blue-950/10 dark:text-blue-200">
+                                تحديد الموقع على الخريطة اختياري، لكنه يساعد المستأجرين على فهم مكان العقار بدقة أكبر.
                             </div>
+
+                            <DynamicLocationPicker value={selectedLocation} onLocationSelect={setSelectedLocation} />
                         </div>
-                    )}
+                    ) : null}
 
-                    {step === 4 && (
-                        <div className="space-y-6 animate-fadeIn">
-                            <div className="text-center mb-8">
-                                <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">بيانات التواصل</h2>
-                                <p className="text-gray-500 dark:text-gray-400">كيف يمكن للمستأجرين الوصول إليك؟</p>
+                    {step === 4 ? (
+                        <div className="animate-fadeIn space-y-6">
+                            <div className="mb-8 text-center">
+                                <h2 className="mb-2 text-2xl font-bold text-gray-900 dark:text-white">بيانات التواصل</h2>
+                                <p className="text-gray-500 dark:text-gray-400">حدد البيانات التي ستظهر للمستأجرين بعد فك القفل.</p>
                             </div>
 
-                            <div className="bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30 p-4 rounded-xl flex gap-3 text-amber-800 dark:text-amber-200 text-sm">
-                                <span className="material-symbols-outlined shrink-0 mt-0.5">lock</span>
+                            <div className="flex gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-900/30 dark:bg-amber-900/10 dark:text-amber-200">
+                                <span className="material-symbols-outlined mt-0.5 shrink-0">lock</span>
                                 <p>رقم هاتفك سيبقى مخفياً عن المستأجرين حتى يقوموا بدفع رسوم الخدمة لضمان الجدية.</p>
                             </div>
 
-                            <InputField
-                                label="اسمك الكامل *"
-                                placeholder="الاسم كما سيظهر للمستأجرين"
+                            <OwnerDetailsStep
+                                user={ownerDetailsUser}
                                 value={formData.ownerName}
-                                onChange={(e: any) => setFormData({ ...formData, ownerName: e.target.value })}
-                                error={validationErrors.includes('ownerName') ? 'مطلوب' : undefined}
+                                onChange={(name) => {
+                                    hasEditedOwnerNameRef.current = true;
+                                    setFormData((prev) => ({
+                                        ...prev,
+                                        ownerName: name,
+                                    }));
+                                }}
                             />
+
+                            {validationErrors.includes('ownerName') ? (
+                                <p className="-mt-2 text-xs text-red-500">مطلوب إدخال اسم صاحب العقار.</p>
+                            ) : null}
 
                             <InputField
                                 label="رقم الهاتف *"
                                 type="tel"
                                 placeholder="01xxxxxxxxx"
                                 value={formData.ownerPhone}
-                                onChange={(e: any) => setFormData({ ...formData, ownerPhone: e.target.value })}
+                                onChange={(event) =>
+                                    setFormData((prev) => ({
+                                        ...prev,
+                                        ownerPhone: event.target.value,
+                                    }))
+                                }
                                 dir="ltr"
                                 className="text-right"
                                 error={validationErrors.includes('ownerPhone') ? 'مطلوب' : undefined}
                             />
 
-                            <div className="bg-gray-50 dark:bg-zinc-800 rounded-2xl p-5 space-y-4 border border-gray-100 dark:border-white/5">
-                                <h3 className="font-bold text-gray-900 dark:text-white border-b border-gray-200 dark:border-white/10 pb-2">ملخص العقار</h3>
+                            <div className="space-y-4 rounded-2xl border border-gray-100 bg-gray-50 p-5 dark:border-white/5 dark:bg-zinc-800">
+                                <h3 className="border-b border-gray-200 pb-2 font-bold text-gray-900 dark:border-white/10 dark:text-white">
+                                    ملخص العقار
+                                </h3>
+
                                 <div className="grid grid-cols-2 gap-y-2 text-sm">
                                     <span className="text-gray-500">النوع:</span>
-                                    <span className="text-gray-900 dark:text-white font-medium">{CATEGORY_AR[formData.category]}</span>
+                                    <span className="font-medium text-gray-900 dark:text-white">{CATEGORY_AR[formData.category]}</span>
 
                                     <span className="text-gray-500">السعر:</span>
-                                    <span className="text-primary font-bold">{formData.price} ج.م / {PRICE_UNIT_AR[formData.priceUnit]}</span>
+                                    <span className="font-bold text-primary">
+                                        {formData.price || '0'} ج.م / {PRICE_UNIT_AR[formData.priceUnit]}
+                                    </span>
 
                                     <span className="text-gray-500">المنطقة:</span>
-                                    <span className="text-gray-900 dark:text-white font-medium">{formData.selectedArea}</span>
+                                    <span className="font-medium text-gray-900 dark:text-white">{formData.selectedArea || 'غير محددة'}</span>
+
+                                    <span className="text-gray-500">الموقع الدقيق:</span>
+                                    <span className="font-medium text-gray-900 dark:text-white">
+                                        {selectedLocation ? 'تم تحديده على الخريطة' : 'غير محدد'}
+                                    </span>
 
                                     <span className="text-gray-500">الصور:</span>
-                                    <span className="text-gray-900 dark:text-white font-medium">{images.length} صور</span>
+                                    <span className="font-medium text-gray-900 dark:text-white">{stagedImages.length} صور</span>
                                 </div>
                             </div>
                         </div>
-                    )}
+                    ) : null}
                 </div>
             </section>
 
-            {/* Footer Buttons */}
-            <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/80 dark:bg-black/80 backdrop-blur-xl border-t border-gray-200 dark:border-white/10 z-40">
-                <div className="max-w-2xl mx-auto flex gap-4">
-                    {step > 1 && (
+            <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-gray-200 bg-white/80 p-4 backdrop-blur-xl dark:border-white/10 dark:bg-black/80">
+                <div className="mx-auto flex max-w-2xl gap-4">
+                    {step > 1 ? (
                         <button
-                            onClick={() => setStep(step - 1)}
-                            className="flex-1 py-4 rounded-2xl font-bold bg-gray-100 dark:bg-zinc-800 text-gray-900 dark:text-white hover:bg-gray-200 dark:hover:bg-zinc-700 transition-all"
+                            type="button"
+                            onClick={() => setStep((prev) => prev - 1)}
+                            className="flex-1 rounded-2xl bg-gray-100 py-4 font-bold text-gray-900 transition-all hover:bg-gray-200 dark:bg-zinc-800 dark:text-white dark:hover:bg-zinc-700"
                         >
                             السابق
                         </button>
-                    )}
+                    ) : null}
 
                     {step < 4 ? (
                         <button
+                            type="button"
                             onClick={handleNextStep}
-                            className="flex-[2] py-4 rounded-2xl font-bold bg-primary text-white shadow-lg shadow-primary/20 hover:bg-primary/90 active:scale-95 transition-all"
+                            className="flex-[2] rounded-2xl bg-primary py-4 font-bold text-white shadow-lg shadow-primary/20 transition-all hover:bg-primary/90 active:scale-95"
                         >
                             التالي
                         </button>
                     ) : (
                         <button
+                            type="button"
                             onClick={handleSubmit}
                             disabled={loading || uploading}
-                            className="flex-[2] py-4 rounded-2xl font-bold bg-primary text-white shadow-lg shadow-primary/20 hover:bg-primary/90 active:scale-95 transition-all disabled:opacity-50 disabled:pointer-events-none flex items-center justify-center gap-2"
+                            className="flex-[2] rounded-2xl bg-primary py-4 font-bold text-white shadow-lg shadow-primary/20 transition-all hover:bg-primary/90 active:scale-95 disabled:pointer-events-none disabled:opacity-50"
                         >
-                            {loading ? (
-                                <>
-                                    <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                            {uploading ? (
+                                <span className="flex items-center justify-center gap-2">
+                                    <span className="h-5 w-5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                                    جاري رفع الصور...
+                                </span>
+                            ) : loading ? (
+                                <span className="flex items-center justify-center gap-2">
+                                    <span className="h-5 w-5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
                                     جاري النشر...
-                                </>
+                                </span>
                             ) : (
                                 'نشر العقار'
                             )}

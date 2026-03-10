@@ -1,44 +1,16 @@
 import { Metadata } from 'next';
+import { fromPropertyRow } from '@/lib/propertyMapper';
 import { supabaseService } from '@/services/supabaseService';
 import ClientPropertyDetails from './client';
 import { notFound } from 'next/navigation';
 import { Property, CATEGORY_AR } from '@/types';
 
-// Fetch property data helper
 async function getProperty(id: string): Promise<Property | null> {
     const propertyRow = await supabaseService.getPropertyById(id);
 
     if (!propertyRow) return null;
 
-    // Map Supabase row to App Property type
-    return {
-        id: propertyRow.id,
-        title: propertyRow.title,
-        description: propertyRow.description || '',
-        price: propertyRow.price,
-        priceUnit: propertyRow.price_unit || 'day',
-        category: propertyRow.category,
-        status: propertyRow.status,
-        images: propertyRow.images || [],
-        location: {
-            lat: propertyRow.location_lat || 0,
-            lng: propertyRow.location_lng || 0,
-            address: propertyRow.address || 'جمصة',
-            area: propertyRow.area || '',
-        },
-        ownerPhone: propertyRow.owner_phone || '',
-        ownerId: propertyRow.owner_id,
-        ownerName: propertyRow.owner_name || 'مالك العقار',
-        features: propertyRow.features || [],
-        bedrooms: propertyRow.bedrooms || 1,
-        bathrooms: propertyRow.bathrooms || 1,
-        area: propertyRow.floor_area || 0,
-        floor: propertyRow.floor_number || 1,
-        isVerified: propertyRow.is_verified,
-        viewsCount: propertyRow.views_count,
-        createdAt: propertyRow.created_at,
-        updatedAt: propertyRow.updated_at,
-    };
+    return fromPropertyRow(propertyRow);
 }
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
@@ -47,25 +19,25 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 
     if (!property) {
         return {
-            title: 'عقار غير موجود',
+            title: 'ط¹ظ‚ط§ط± ط؛ظٹط± ظ…ظˆط¬ظˆط¯',
         };
     }
 
-    const title = `${property.title} - ${property.price} ج.م | عقارات جمصة`;
-    const description = `${CATEGORY_AR[property.category]} للإيجار في ${property.location.address}. ${property.bedrooms} غرف، ${property.bathrooms} حمام. ${property.description.substring(0, 100)}...`;
+    const title = `${property.title} - ${property.price} ط¬.ظ… | ط¹ظ‚ط§ط±ط§طھ ط¬ظ…طµط©`;
+    const description = `${CATEGORY_AR[property.category]} ظ„ظ„ط¥ظٹط¬ط§ط± ظپظٹ ${property.location.address}. ${property.bedrooms} ط؛ط±ظپطŒ ${property.bathrooms} ط­ظ…ط§ظ…. ${property.description.substring(0, 100)}...`;
 
     return {
-        title: title,
-        description: description,
+        title,
+        description,
         openGraph: {
-            title: title,
-            description: description,
+            title,
+            description,
             images: property.images.length > 0 ? [property.images[0]] : [],
         },
         twitter: {
             card: 'summary_large_image',
-            title: title,
-            description: description,
+            title,
+            description,
             images: property.images.length > 0 ? [property.images[0]] : [],
         },
     };
@@ -74,7 +46,6 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 export default async function PropertyPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = await params;
 
-    // Increase view count (Server Action style)
     await supabaseService.incrementPropertyViews(id);
 
     const property = await getProperty(id);
@@ -83,5 +54,5 @@ export default async function PropertyPage({ params }: { params: Promise<{ id: s
         notFound();
     }
 
-    return <ClientPropertyDetails initialProperty={property} />;
+    return <ClientPropertyDetails key={property.id} initialProperty={property} />;
 }

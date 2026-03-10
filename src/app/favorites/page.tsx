@@ -1,22 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { fromPropertyRow } from '@/lib/propertyMapper';
 import { supabaseService } from '@/services/supabaseService';
 import { PropertyCard } from '@/components/PropertyCard';
-import Header from '@/components/Header';
-import { BottomNav } from '@/components/BottomNav';
 import { useAuth } from '@/context/AuthContext';
 import { Property } from '@/types';
 import Link from 'next/link';
-import { GlassCard } from '@/components/ui/glass';
-
-import { Metadata } from 'next';
-
-export const metadata: Metadata = {
-  title: 'المفضلة - عقاراتك المفضلة في جمصة',
-  description: 'تصفح قائمتك المفضلة من العقارات في جمصة. حفظ عقاراتك المفضلة للوصول السريع.',
-  keywords: ['المفضلة', 'عقارات مفضلة', 'جمصة', 'قائمة الرغبات'],
-};
 
 export default function FavoritesPage() {
     const [favorites, setFavorites] = useState<Property[]>([]);
@@ -46,34 +36,7 @@ export default function FavoritesPage() {
             }
 
             // 3. Map to Property type
-            const mappedProperties: Property[] = properties.map(row => ({
-                id: row.id,
-                title: row.title,
-                description: row.description || '',
-                price: row.price,
-                priceUnit: row.price_unit || 'day',
-                category: row.category,
-                status: row.status,
-                images: row.images || [],
-                location: {
-                    lat: row.location_lat || 0,
-                    lng: row.location_lng || 0,
-                    address: row.address || '',
-                    area: row.area || '',
-                },
-                ownerPhone: row.owner_phone || '',
-                ownerId: row.owner_id,
-                ownerName: row.owner_name || '',
-                features: row.features || [],
-                bedrooms: row.bedrooms || 1,
-                bathrooms: row.bathrooms || 1,
-                area: row.floor_area || 0,
-                floor: row.floor_number || 1,
-                isVerified: row.is_verified,
-                viewsCount: row.views_count,
-                createdAt: row.created_at,
-                updatedAt: row.updated_at,
-            }));
+            const mappedProperties: Property[] = properties.map(fromPropertyRow);
 
             setFavorites(mappedProperties);
         } catch (error) {
@@ -94,7 +57,6 @@ export default function FavoritesPage() {
     if (!isAuthenticated) {
         return (
             <div className="min-h-screen bg-gray-50 dark:bg-black pb-24">
-                <Header />
                 <div className="flex flex-col items-center justify-center min-h-[60vh] px-4 text-center">
                     <div className="w-24 h-24 bg-gray-200 dark:bg-gray-800 rounded-full flex items-center justify-center mb-6">
                         <span className="material-symbols-outlined text-5xl text-gray-400">lock</span>
@@ -110,16 +72,13 @@ export default function FavoritesPage() {
                         تسجيل الدخول
                     </Link>
                 </div>
-                <BottomNav />
             </div>
         );
     }
 
     return (
-        <div className="min-h-screen bg-gray-50 dark:bg-black pb-24">
-            <Header />
-
-            <div className="max-w-5xl mx-auto px-4 py-8">
+        <div className="min-h-screen bg-gray-50 dark:bg-black pt-24 pb-32 md:pt-[104px] md:pb-12">
+            <div className="max-w-7xl mx-auto xl:max-w-[1400px] px-4 py-8">
                 <div className="flex items-center gap-3 mb-8">
                     <h1 className="text-2xl font-bold text-gray-900 dark:text-white">المفضلة</h1>
                     <span className="bg-red-500/10 text-red-500 text-sm font-bold px-3 py-1 rounded-full">{favorites.length}</span>
@@ -154,8 +113,6 @@ export default function FavoritesPage() {
                     </div>
                 )}
             </div>
-
-            <BottomNav />
         </div>
     );
 }

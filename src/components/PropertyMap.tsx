@@ -1,27 +1,11 @@
 'use client';
 
-import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
-import 'leaflet/dist/leaflet.css';
-import { Property } from '@/types';
-import L from 'leaflet';
-import { useEffect } from 'react';
+import '@/lib/leafletDefaultIcon';
+
+import { MapContainer, Marker, Popup, TileLayer } from 'react-leaflet';
 import Link from 'next/link';
 import Image from 'next/image';
-
-// Fix for default Leaflet icons in Next.js
-const iconUrl = 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png';
-const iconRetinaUrl = 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png';
-const shadowUrl = 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png';
-
-const customIcon = new L.Icon({
-    iconUrl: iconUrl,
-    iconRetinaUrl: iconRetinaUrl,
-    shadowUrl: shadowUrl,
-    iconSize: [25, 41],
-    iconAnchor: [12, 41],
-    popupAnchor: [1, -34],
-    shadowSize: [41, 41]
-});
+import { PRICE_UNIT_AR, type Property } from '@/types';
 
 interface PropertyMapProps {
     properties: Property[];
@@ -29,27 +13,15 @@ interface PropertyMapProps {
     zoom?: number;
 }
 
-// Default center (Gamasa)
 const DEFAULT_CENTER: [number, number] = [31.4456, 31.5477];
 
 export default function PropertyMap({ properties, center = DEFAULT_CENTER, zoom = 14 }: PropertyMapProps) {
-    useEffect(() => {
-        // Fix Leaflet's default icon path issues
-        // @ts-ignore
-        delete L.Icon.Default.prototype._getIconUrl;
-        L.Icon.Default.mergeOptions({
-            iconRetinaUrl,
-            iconUrl,
-            shadowUrl,
-        });
-    }, []);
-
     return (
         <MapContainer
             center={center}
             zoom={zoom}
-            scrollWheelZoom={true}
-            className="w-full h-full rounded-2xl z-0"
+            scrollWheelZoom
+            className="h-full w-full rounded-2xl z-0"
             style={{ minHeight: '400px' }}
         >
             <TileLayer
@@ -60,12 +32,11 @@ export default function PropertyMap({ properties, center = DEFAULT_CENTER, zoom 
             {properties.map((property) => (
                 <Marker
                     key={property.id}
-                    position={[property.location.lat || DEFAULT_CENTER[0], property.location.lng || DEFAULT_CENTER[1]]}
-                    icon={customIcon}
+                    position={[property.location.lat as number, property.location.lng as number]}
                 >
                     <Popup className="glass-popup">
                         <div className="w-48 p-1">
-                            <div className="relative h-24 w-full mb-2 rounded-lg overflow-hidden">
+                            <div className="relative mb-2 h-24 w-full overflow-hidden rounded-lg">
                                 <Image
                                     src={property.images[0] || '/images/placeholder.jpg'}
                                     alt={property.title}
@@ -73,13 +44,14 @@ export default function PropertyMap({ properties, center = DEFAULT_CENTER, zoom 
                                     className="object-cover"
                                 />
                             </div>
-                            <h3 className="font-bold text-sm mb-1 line-clamp-1">{property.title}</h3>
-                            <p className="text-primary font-bold text-xs mb-2">
-                                {property.price.toLocaleString()} ج.م / {property.priceUnit}
+                            <h3 className="mb-1 line-clamp-1 text-sm font-bold">{property.title}</h3>
+                            <p className="mb-2 text-xs font-bold text-primary">
+                                {property.price.toLocaleString('ar-EG')} ج.م / {PRICE_UNIT_AR[property.priceUnit]}
                             </p>
+                            <p className="mb-2 line-clamp-1 text-[11px] text-gray-500">{property.location.address}</p>
                             <Link
                                 href={`/property/${property.id}`}
-                                className="block w-full text-center bg-primary text-white text-xs py-1.5 rounded-md hover:bg-primary/90 transition-colors"
+                                className="block w-full rounded-md bg-primary py-1.5 text-center text-xs text-white transition-colors hover:bg-primary/90"
                             >
                                 عرض التفاصيل
                             </Link>

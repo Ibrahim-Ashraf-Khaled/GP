@@ -42,11 +42,13 @@
 
   /* Additional Variables found in screenshots */
   --blur-xl: 24px;
+  --chrome-bottom: 88px;
 
   /* Fonts */
   --font-sans: var(--font-arabic), system-ui, sans-serif;
   --font-display: var(--font-arabic), system-ui, sans-serif;
 }
+
 
 @layer base {
   body {
@@ -92,6 +94,15 @@
   }
 
   .hide-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  .scrollbar-hide {
     -ms-overflow-style: none;
     scrollbar-width: none;
   }

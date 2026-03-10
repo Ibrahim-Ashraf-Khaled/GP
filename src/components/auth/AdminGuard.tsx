@@ -1,6 +1,7 @@
 'use client';
 
 import { useAuth } from '@/context/AuthContext';
+import { isAdminRole } from '@/lib/roles';
 import { useRouter } from 'next/navigation';
 import { useEffect, ReactNode } from 'react';
 
@@ -9,18 +10,18 @@ interface AdminGuardProps {
 }
 
 export default function AdminGuard({ children }: AdminGuardProps) {
-    const { profile, loading, isAuthenticated } = useAuth();
+    const { user, loading, isAuthenticated } = useAuth();
     const router = useRouter();
 
     useEffect(() => {
         if (!loading) {
             if (!isAuthenticated) {
                 router.push('/auth');
-            } else if (!profile?.is_admin) {
+            } else if (!isAdminRole(user?.role)) {
                 router.push('/');
             }
         }
-    }, [profile, loading, isAuthenticated, router]);
+    }, [user, loading, isAuthenticated, router]);
 
     if (loading) {
         return (
@@ -35,7 +36,7 @@ export default function AdminGuard({ children }: AdminGuardProps) {
         );
     }
 
-    if (!isAuthenticated || !profile?.is_admin) {
+    if (!isAuthenticated || !isAdminRole(user?.role)) {
         return null;
     }
 

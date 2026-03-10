@@ -67,18 +67,14 @@ export default function AdminPaymentsPage() {
     const handleAction = async (payment: PaymentRequest, newStatus: 'approved' | 'rejected') => {
         setActionLoading(payment.id);
         try {
-            await supabase
-                .from('payment_requests')
-                .update({
-                    status: newStatus,
-                    processed_at: new Date().toISOString(),
-                })
-                .eq('id', payment.id);
-
             if (newStatus === 'approved') {
                 try {
                     // Unlock the property for the user (now secure)
-                    await supabaseService.unlockProperty(payment.user_id, payment.property_id);
+                    await supabaseService.approvePaymentAndUnlock(
+                        payment.id,
+                        payment.user_id,
+                        payment.property_id
+                    );
 
                     // Send success notification
                     await supabaseService.createNotification({
@@ -94,7 +90,7 @@ export default function AdminPaymentsPage() {
                     // Revert payment status if unlock fails
                     await supabase
                         .from('payment_requests')
-                        .update({ status: 'pending' })
+                        .update({ status: 'pending', processed_at: null, is_consumed: false })
                         .eq('id', payment.id);
                     
                     alert('فشل فتح العقار. يرجى المحاولة مرة أخرى.');
@@ -102,6 +98,18 @@ export default function AdminPaymentsPage() {
                     return;
                 }
             } else {
+                const { error: updateError } = await supabase
+                    .from('payment_requests')
+                    .update({
+                        status: newStatus,
+                        processed_at: new Date().toISOString(),
+                    })
+                    .eq('id', payment.id);
+
+                if (updateError) {
+                    throw updateError;
+                }
+
                 // Send rejection notification
                 await supabaseService.createNotification({
                     userId: payment.user_id,

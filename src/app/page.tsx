@@ -1,14 +1,12 @@
 import { Metadata } from 'next';
 import Link from 'next/link';
-import { BottomNav } from '@/components/BottomNav';
-import Header from '@/components/Header';
 import { PropertyCard } from '@/components/PropertyCard';
-import { CategoryFilter } from '@/components/CategoryFilter';
+import HomeSearchBar from '@/components/home/HomeSearchBar';
 
 // Mock data matches PropertyCardProps roughly
 const featuredProperties = [
   {
-    id: "1",
+    id: "682e1fec-b250-4af2-921c-c2fd88823211",
     title: "فيلا الواحة",
     location: "منطقة الفيلات، جمصة",
     price: 2000,
@@ -22,7 +20,7 @@ const featuredProperties = [
     isVerified: true
   },
   {
-    id: "2",
+    id: "682e1fec-b250-4af2-921c-c2fd88823212",
     title: "ستوديو بانوراما",
     location: "شارع الكورنيش، جمصة",
     price: 850,
@@ -35,7 +33,7 @@ const featuredProperties = [
     isVerified: true
   },
   {
-    id: "3",
+    id: "682e1fec-b250-4af2-921c-c2fd88823213",
     title: "شقة فندقية فاخرة",
     location: "منطقة 15 مايو، جمصة",
     price: 1200,
@@ -48,7 +46,7 @@ const featuredProperties = [
     rating: 4.7,
   },
   {
-    id: "4",
+    id: "682e1fec-b250-4af2-921c-c2fd88823214",
     title: "شاليه عائلي",
     location: "الكورنيش، صف ثاني",
     price: 800,
@@ -61,7 +59,7 @@ const featuredProperties = [
     rating: 4.5,
   },
   {
-    id: "5",
+    id: "d9e832aa-24dd-4a7b-8bf1-e77a29dc8fdf",
     title: "شقة مصيفية",
     location: "جمصة البلد",
     price: 500,
@@ -77,7 +75,7 @@ const featuredProperties = [
 
 const recentProperties = [
   {
-    id: "6",
+    id: "f83b15ad-4d1a-4c22-b5e8-0b615baf30ad",
     title: "فيلا بإطلالة بحرية",
     location: "منطقة الشاطئ، جمصة",
     price: 1500,
@@ -90,7 +88,7 @@ const recentProperties = [
     rating: 4.9,
   },
   {
-    id: "7",
+    id: "6aab7de8-ff7d-411a-8260-bc04bd8ae302",
     title: "شالية حديثة",
     location: "الكورنيش، جمصة",
     price: 650,
@@ -103,7 +101,7 @@ const recentProperties = [
     rating: 4.6,
   },
   {
-    id: "8",
+    id: "9c3e4142-bebe-451e-8cd3-4cb82b9e6cbb",
     title: "شقة عائلية واسعة",
     location: "جمصة البلد",
     price: 750,
@@ -131,52 +129,43 @@ export const metadata: Metadata = {
 
 export default function HomePage() {
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-black pb-24">
-      {/* Static Header (scrolls away) */}
-      <Header />
+    <div className="min-h-screen bg-gray-50 dark:bg-black pb-8 md:pb-12">
 
-      {/* Sticky Search Bar */}
-      <div className="sticky top-0 z-30 bg-white/80 dark:bg-black/80 backdrop-blur-xl px-4 py-4 border-b border-gray-200 dark:border-white/10 transition-all duration-300">
-        <div className="max-w-5xl mx-auto relative group">
-          {/* Search Icon (Right) */}
-          <span className="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-primary transition-colors text-xl">
-            search
-          </span>
+      {/* Hero Section (Desktop + Mobile) */}
+      <section className="relative min-h-[50vh] md:min-h-[75vh] flex items-center justify-center pt-24 px-4 overflow-hidden">
+        <div className="absolute inset-0 bg-[url('/images/property4.png')] bg-cover bg-center"></div>
+        <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/30 via-80% to-gray-50/80 dark:to-black"></div>
+        <div className="relative z-10 w-full max-w-7xl mx-auto flex flex-col items-center text-center mt-[-40px]">
+          <h1 className="text-4xl md:text-5xl lg:text-7xl font-bold text-white mb-4 md:mb-6 shadow-sm drop-shadow-md">
+            اكتشف عقار أحلامك في جمصة
+          </h1>
+          <p className="text-white/90 text-sm md:text-xl max-w-2xl mb-8 md:mb-12 shadow-sm drop-shadow-sm font-medium">
+            شاليهات، فيلات، وشقق عصرية بأسعار تنافسية. احجز الآن واستمتع بإجازتك.
+          </p>
 
-          <input
-            type="text"
-            placeholder="ابحث عن شاليه، فيلا، أو شقة..."
-            className="w-full p-4 pr-12 pl-12 rounded-2xl bg-gray-100 dark:bg-white/10 border-2 border-transparent focus:border-primary/50 focus:bg-white dark:focus:bg-black text-gray-900 dark:text-white transition-all outline-none shadow-sm placeholder-gray-500"
-          />
-
-          {/* Filter Button (Left) */}
-          <Link
-            href="/search"
-            className="absolute left-2 top-1/2 -translate-y-1/2 bg-white dark:bg-zinc-800 p-2 rounded-xl shadow-sm hover:shadow-md transition-all text-gray-600 dark:text-gray-300 hover:text-primary active:scale-95"
-          >
-            <span className="material-symbols-outlined text-[20px]">tune</span>
-          </Link>
+          {/* Premium Search Bar */}
+          <HomeSearchBar />
         </div>
-      </div>
-
-      {/* Client-side Category Filter */}
-      <CategoryFilter />
+      </section>
 
       {/* Featured Properties Section */}
-      <section className="px-4 py-6 max-w-5xl mx-auto">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-            <span className="material-symbols-outlined text-primary text-2xl">stars</span>
+      <section className="px-4 py-8 md:py-12 max-w-7xl mx-auto xl:max-w-[1400px]">
+        <div className="flex items-center justify-between mb-8">
+          <h2 className="text-xl md:text-3xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
+            <div className="p-2 bg-primary/10 rounded-xl flex items-center justify-center">
+              <span className="material-symbols-outlined text-primary text-2xl md:text-3xl">stars</span>
+            </div>
             مميز
           </h2>
           <Link
             href="/search?featured=true"
-            className="text-sm text-primary hover:text-primary/80 font-medium"
+            className="text-sm md:text-base text-primary hover:text-primary/80 font-bold transition-colors flex items-center gap-1 group"
           >
             عرض الكل
+            <span className="material-symbols-outlined text-[18px] rtl:rotate-180 transition-transform group-hover:-translate-x-1">arrow_forward</span>
           </Link>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 md:gap-8">
           {featuredProperties.map((property) => (
             <PropertyCard key={property.id} {...property} />
           ))}
@@ -184,20 +173,23 @@ export default function HomePage() {
       </section>
 
       {/* Recent Properties Section */}
-      <section className="px-4 py-6 max-w-5xl mx-auto">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-            <span className="material-symbols-outlined text-primary text-2xl">new_releases</span>
+      <section className="px-4 py-8 md:py-12 max-w-7xl mx-auto xl:max-w-[1400px]">
+        <div className="flex items-center justify-between mb-8">
+          <h2 className="text-xl md:text-3xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
+            <div className="p-2 bg-primary/10 rounded-xl flex items-center justify-center">
+              <span className="material-symbols-outlined text-primary text-2xl md:text-3xl">new_releases</span>
+            </div>
             حديث الإضافة
           </h2>
           <Link
             href="/search?recent=true"
-            className="text-sm text-primary hover:text-primary/80 font-medium"
+            className="text-sm md:text-base text-primary hover:text-primary/80 font-bold transition-colors flex items-center gap-1 group"
           >
             عرض الكل
+            <span className="material-symbols-outlined text-[18px] rtl:rotate-180 transition-transform group-hover:-translate-x-1">arrow_forward</span>
           </Link>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 md:gap-8">
           {recentProperties.map((property) => (
             <PropertyCard key={property.id} {...property} />
           ))}
@@ -205,26 +197,28 @@ export default function HomePage() {
       </section>
 
       {/* CTA Section */}
-      <section className="px-4 py-8 max-w-5xl mx-auto">
-        <div className="bg-gradient-to-r from-primary to-primary/90 rounded-3xl p-8 text-center text-white relative overflow-hidden">
+      <section className="px-4 py-12 md:py-16 max-w-7xl mx-auto xl:max-w-[1400px]">
+        <div className="bg-gradient-to-r from-primary to-primary/80 dark:from-primary/90 dark:to-primary/60 rounded-3xl p-8 md:p-12 text-center text-white relative overflow-hidden shadow-2xl hover:shadow-primary/30 transition-shadow duration-500">
           <div className="absolute inset-0 bg-black/10"></div>
+          <div className="absolute -right-24 -top-24 w-64 h-64 bg-white/10 rounded-full blur-3xl"></div>
+          <div className="absolute -left-24 -bottom-24 w-64 h-64 bg-white/10 rounded-full blur-3xl"></div>
+
           <div className="relative z-10">
-            <h2 className="text-2xl font-bold mb-4">هل تملك عقار في جمصة؟</h2>
-            <p className="text-white/90 mb-6 max-w-md mx-auto">
-              انشر عقارك في منصتنا واكتآف من آلاف المستأجرين الباحثين عن إقامة مميزة
+            <h2 className="text-3xl md:text-4xl font-bold mb-4">هل تملك عقاراً في جمصة؟</h2>
+            <p className="text-white/90 text-sm md:text-lg mb-8 max-w-2xl mx-auto font-medium">
+              انشر عقارك في منصتنا واكتآف من آلاف المستأجرين الباحثين عن إقامة مميزة. نحن نوفر لك لوحة تحكم متكاملة لمدارة حجوزاتك بسهولة.
             </p>
             <Link
               href="/add-property"
-              className="inline-flex items-center gap-2 bg-white text-primary px-6 py-3 rounded-2xl font-medium hover:bg-white/90 transition-all hover:scale-105 active:scale-95"
+              className="inline-flex items-center gap-2 bg-white text-primary px-8 py-4 rounded-2xl font-bold text-lg hover:bg-gray-50 transition-all hover:scale-105 hover:shadow-xl active:scale-95"
             >
-              <span className="material-symbols-outlined">add_home</span>
+              <span className="material-symbols-outlined text-2xl">add_home</span>
               أضف عقارك الآن
             </Link>
           </div>
         </div>
       </section>
 
-      <BottomNav />
     </div>
   );
 }

@@ -1,5 +1,3 @@
-// أنواع البيانات الأساسية للمنصة (English values for schema/API; use CATEGORY_AR, STATUS_AR for UI)
-
 import type { PropertyCategory, PropertyStatus, PriceUnit } from './database.types';
 
 export type { PropertyCategory, PropertyStatus, PriceUnit } from './database.types';
@@ -8,28 +6,25 @@ export { CATEGORY_AR, PRICE_UNIT_AR, STATUS_AR } from './database.types';
 export type UserRole = 'tenant' | 'landlord' | 'admin';
 export type PaymentStatus = 'pending' | 'approved' | 'rejected';
 
-// Role Constants
 export const ROLE_LANDLORD: UserRole = 'landlord';
 export const ROLE_TENANT: UserRole = 'tenant';
 export const ROLE_ADMIN: UserRole = 'admin';
 
-// Role Labels (Arabic for UI)
 export const ROLE_LABELS: Record<UserRole, string> = {
-  tenant: 'مستأجر',
-  landlord: 'مؤجر',
-  admin: 'مسؤول',
+    tenant: 'مستأجر',
+    landlord: 'مؤجر',
+    admin: 'مسؤول',
 };
 
-// Role Helper Functions
 export const isLandlord = (role: UserRole | undefined): boolean => role === 'landlord';
 export const isTenant = (role: UserRole | undefined): boolean => role === 'tenant';
 export const isAdmin = (role: UserRole | undefined): boolean => role === 'admin';
 
 export interface Location {
-    lat: number;
-    lng: number;
+    lat: number | null;
+    lng: number | null;
     address: string;
-    area: string; // مثل: الكرنك، البحر، المركز
+    area: string;
 }
 
 export interface Property {
@@ -42,25 +37,18 @@ export interface Property {
     status: PropertyStatus;
     images: string[];
     location: Location;
-    ownerPhone: string; // مخفي حتى الدفع
+    ownerPhone: string;
     ownerId: string;
     ownerName: string;
-    features: string[]; // مثل: تكييف، واي فاي، قريب من البحر
+    features: string[];
     bedrooms: number;
     bathrooms: number;
-    area: number; // المساحة بالمتر المربع
+    area: number;
     floor: number;
-    isVerified: boolean; // تم معاينته من الإدارة
+    isVerified: boolean;
     viewsCount: number;
     createdAt: string;
     updatedAt: string;
-
-    // نظام الحجز الجديد
-    rentalConfig?: RentalConfig; // تكوين الإيجار (اختياري للتوافق مع البيانات القديمة)
-    availableDates?: {
-        start: string;
-        end: string;
-    }[]; // الفتر ات المتاحة للحجز
 }
 
 export interface User {
@@ -70,13 +58,13 @@ export interface User {
     email?: string;
     avatar?: string;
     role: UserRole;
-    nationalId?: string; // للتوثيق
+    nationalId?: string;
     isVerified: boolean;
-    favorites: string[]; // معرفات العقارات المفضلة
-    unlockedProperties: string[]; // العقارات المدفوع عليها
+    favorites: string[];
+    unlockedProperties: string[];
     createdAt: string;
-    lastLogin?: string; // آخر تسجيل دخول
-    memberSince: string; // تاريخ الانضمام
+    lastLogin?: string;
+    memberSince: string;
 }
 
 export interface PaymentRequest {
@@ -88,7 +76,7 @@ export interface PaymentRequest {
     propertyTitle: string;
     amount: number;
     paymentMethod: 'vodafone_cash' | 'instapay' | 'fawry';
-    receiptImage: string; // رابط صورة الإيصال
+    receiptImage: string;
     status: PaymentStatus;
     adminNote?: string;
     createdAt: string;
@@ -101,7 +89,7 @@ export interface Review {
     userId: string;
     userName: string;
     userAvatar?: string;
-    rating: number; // 1-5
+    rating: number;
     comment: string;
     createdAt: string;
 }
@@ -114,8 +102,8 @@ export interface Contract {
     startDate: string;
     endDate: string;
     totalAmount: number;
-    ownerSignature?: string; // Base64
-    tenantSignature?: string; // Base64
+    ownerSignature?: string;
+    tenantSignature?: string;
     status: 'draft' | 'signed' | 'completed';
     createdAt: string;
 }
@@ -128,7 +116,7 @@ export interface Notification {
     type: 'success' | 'info' | 'warning' | 'error';
     isRead: boolean;
     createdAt: string;
-    link?: string; // رابط للانتقال عند الضغط
+    link?: string;
 }
 
 export interface SearchFilters {
@@ -142,7 +130,6 @@ export interface SearchFilters {
     onlyVerified?: boolean;
 }
 
-// الثوابت
 export const AREAS = [
     'منطقة الكرنك',
     'منطقة البحر',
@@ -153,25 +140,9 @@ export const AREAS = [
     'الحي الشرقي',
 ];
 
-export const FEATURES = [
-    'تكييف',
-    'واي فاي',
-    'قريب من البحر',
-    'موقف سيارة',
-    'مطبخ مجهز',
-    'شرفة',
-    'إطلالة بحرية',
-    'أثاث كامل',
-    'غسالة',
-    'تلفزيون',
-    'سخان مياه',
-    'مصعد',
-];
-
-export const COMMISSION_AMOUNT = 50; // قيمة السمسرة بالجنيه
-export const SERVICE_FEE_PERCENTAGE = 0.1; // 10% رسوم خدمة
-
-export const VODAFONE_CASH_NUMBER = '01xxxxxxxxx'; // سيتم تحديده
+export const COMMISSION_AMOUNT = 50;
+export const SERVICE_FEE_PERCENTAGE = 0.1;
+export const VODAFONE_CASH_NUMBER = '01xxxxxxxxx';
 
 export const GAMASA_CENTER = {
     lat: 31.4431,
@@ -185,62 +156,55 @@ export const GAMASA_BOUNDS = {
     west: 31.49,
 };
 
-// ====== نظام الحجز المتقدم ======
-
-// أنواع الإيجار
 export type RentalType = 'daily' | 'monthly' | 'seasonal';
 
-// تكوين الإيجار
 export interface RentalConfig {
     type: RentalType;
-    pricePerUnit: number; // السعر لكل وحدة (يوم/شهر)
-    minDuration: number;  // الحد الأدنى للإيجار
-    maxDuration: number;  // الحد الأقصى للإيجار
-
-    // خاص بالإيجار الموسمي
+    pricePerUnit: number;
+    minDuration: number;
+    maxDuration: number;
     seasonalConfig?: {
-        startMonth: number;      // شهر البداية (افتراضي: 9 سبتمبر)
-        endMonth: number;        // شهر النهاية (افتراضي: 6 يونيو)
-        requiresDeposit: boolean; // هل يتطلب تأمين
-        depositAmount?: number;   // قيمة التأمين (افتراضي: سعر شهر واحد)
+        startMonth: number;
+        endMonth: number;
+        requiresDeposit: boolean;
+        depositAmount?: number;
     };
 }
 
-// الحجز
 export interface Booking {
     id: string;
     propertyId: string;
     userId: string;
-
-    // بيانات الحجز
     startDate: string;
     endDate: string;
-    totalNights?: number;  // للإيجار اليومي
-    totalMonths?: number;  // للإيجار الشهري/الموسمي
+    totalNights?: number;
+    totalMonths?: number;
     rentalType: RentalType;
-
-    // بيانات المستأجر (تُملأ من ملف المستخدم)
     tenantName: string;
     tenantPhone: string;
     tenantEmail?: string;
-
-    // التكاليف
-    basePrice: number;      // السعر الأساسي
-    serviceFee: number;     // رسوم الخدمة (10%)
-    depositAmount?: number; // التأمين (للموسمي)
-    totalAmount: number;    // المجموع الكلي
-
-    // الدفع
+    basePrice: number;
+    serviceFee: number;
+    depositAmount?: number;
+    totalAmount: number;
     paymentMethod: 'vodafone_cash' | 'instapay' | 'cash_on_delivery';
     paymentStatus: 'pending' | 'confirmed' | 'failed';
-    paymentProof?: string;  // رابط صورة الإيصال
-
-    // الحالة
-    status: 'pending' | 'confirmed' | 'cancelled';
+    paymentProof?: string;
+    status: 'pending' | 'confirmed' | 'cancelled' | 'completed';
     createdAt: string;
     confirmedAt?: string;
-
-    // العلاقات (للعرض)
     property?: Property;
     user?: User;
+}
+
+export interface PublicBookingPeriod {
+    startDate: string;
+    endDate: string;
+}
+
+export interface TenantPropertyState {
+    unlockedAt: string | null;
+    unlockRequestStatus: 'none' | 'pending' | 'approved' | 'rejected';
+    latestBooking: Pick<Booking, 'id' | 'startDate' | 'endDate' | 'status' | 'createdAt'> | null;
+    hasBookingHistory: boolean;
 }

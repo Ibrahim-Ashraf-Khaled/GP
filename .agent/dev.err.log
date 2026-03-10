@@ -1,0 +1,31 @@
+⨯ The requested resource isn't a valid image for /images/property1.jpg received null
+Error fetching property: {
+  code: 'PGRST116',
+  details: 'The result contains 0 rows',
+  hint: null,
+  message: 'Cannot coerce the result to a single JSON object'
+}
+Error fetching property: {
+  code: 'PGRST116',
+  details: 'The result contains 0 rows',
+  hint: null,
+  message: 'Cannot coerce the result to a single JSON object'
+}
+⨯ The requested resource isn't a valid image for /images/property1.jpg received null
+⨯ The requested resource isn't a valid image for /images/property1.jpg received null
+⨯ The requested resource isn't a valid image for /images/property1.jpg received null
+⨯ The requested resource isn't a valid image for /images/property1.jpg received null
+⨯ The requested resource isn't a valid image for /images/property1.jpg received null
+⨯ The requested resource isn't a valid image for /images/property1.jpg received null
+⨯ Error: useAuth must be used within AuthProvider
+    at useAuth (src\context\AuthContext.tsx:319:15)
+    at ClientPropertyDetails (src\app\property\[id]\client.tsx:21:46)
+  317 |     const context = useContext(AuthContext);
+  318 |     if (!context) {
+> 319 |         throw new Error('useAuth must be used within AuthProvider');
+      |               ^
+  320 |     }
+  321 |     return context;
+  322 | } {
+  digest: '4007953734'
+}

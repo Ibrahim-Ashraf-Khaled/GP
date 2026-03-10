@@ -2,8 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import Header from '@/components/Header';
-import { BottomNav } from '@/components/BottomNav';
 import MyPropertyCard from '@/components/MyPropertyCard';
 import { Property } from '@/types';
 import { getProperties, addProperty, getUserPropertiesFromSupabase } from '@/lib/storage'; // Removed getCurrentUser as we use useAuth
@@ -69,7 +67,6 @@ export default function MyPropertiesPage() {
     if (!user) {
         return (
             <div className="min-h-screen bg-gray-50 dark:bg-black pb-24">
-                <Header />
                 <div className="flex flex-col items-center justify-center min-h-[60vh] px-4 text-center">
                     <div className="w-24 h-24 bg-gray-200 dark:bg-gray-800 rounded-full flex items-center justify-center mb-6">
                         <span className="material-symbols-outlined text-5xl text-gray-400">lock</span>
@@ -85,7 +82,6 @@ export default function MyPropertiesPage() {
                         تسجيل الدخول
                     </Link>
                 </div>
-                <BottomNav />
             </div>
         );
     }
@@ -101,7 +97,7 @@ export default function MyPropertiesPage() {
                 priceUnit: 'يوم',
                 category: 'شقة',
                 status: 'available',
-                images: ['/images/property1.jpg'],
+                images: ['/images/property1.png'],
                 location: { lat: 31.44, lng: 31.53, address: 'جمصة', area: 'منطقة البحر' },
                 ownerPhone: user?.phone || '01000000000',
                 ownerId: user.id,
@@ -142,8 +138,6 @@ export default function MyPropertiesPage() {
     return (
         <ProtectedRoute>
             <div className="min-h-screen bg-gray-50 dark:bg-black pb-24">
-                <Header />
-
                 <div className="max-w-5xl mx-auto px-4 py-8">
                     <div className="flex items-center justify-between mb-8">
                         <div className="flex items-center gap-3">
@@ -202,8 +196,6 @@ export default function MyPropertiesPage() {
                         </div>
                     )}
                 </div>
-
-                <BottomNav />
             </div>
         </ProtectedRoute>
     );
