@@ -102,10 +102,14 @@ export async function uploadPropertyImages(files: File[]): Promise<string[]> {
 }
 
 export async function deletePropertyImages(urls: string[]): Promise<void> {
-    const pathsToDelete = urls.map(url => {
-        const parts = url.split('/');
-        return parts.slice(-2).join('/');
-    }).filter(path => path);
+    const pathsToDelete = urls
+        .filter(url => url.includes('supabase'))
+        .map(url => {
+            const bucketIndex = url.indexOf('properties-images/');
+            if (bucketIndex === -1) return null;
+            return url.substring(bucketIndex + 'properties-images/'.length);
+        })
+        .filter(Boolean) as string[];
 
     if (pathsToDelete.length === 0) {
         return;
@@ -182,6 +186,61 @@ export async function getPropertyByIdFromSupabase(id: string): Promise<Property 
     } catch (error) {
         console.error('Error fetching property from Supabase:', error);
         return null;
+    }
+}
+
+export async function deletePropertyFromSupabase(id: string): Promise<{ success: boolean; error?: string }> {
+    try {
+        const property = await getPropertyByIdFromSupabase(id);
+        if (!property) {
+            return { success: false, error: 'العقار غير موجود' };
+        }
+
+        if (property.images.length > 0) {
+            await deletePropertyImages(property.images);
+        }
+
+        const { error } = await supabase
+            .from('properties')
+            .delete()
+            .eq('id', id);
+
+        if (error) {
+            console.error('Error deleting property from Supabase:', error);
+            return { success: false, error: error.message };
+        }
+
+        return { success: true };
+    } catch (error) {
+        console.error('Error in deletePropertyFromSupabase:', error);
+        return { success: false, error: error instanceof Error ? error.message : 'فشل حذف العقار' };
+    }
+}
+
+export async function updatePropertyInSupabase(
+    id: string,
+    updates: Partial<Property>
+): Promise<Property | null> {
+    try {
+        const dbUpdates = convertPropertyToDB(updates);
+        const updatesWithTimestamp = {
+            ...dbUpdates,
+            updated_at: new Date().toISOString(),
+        };
+
+        const { data, error } = await supabase
+            .from('properties')
+            .update(updatesWithTimestamp)
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (error) throw error;
+
+        return data ? convertPropertyFromDB(data) : null;
+    } catch (error) {
+        console.error('Error updating property in Supabase:', error);
+        throw error;
     }
 }
 
@@ -487,7 +546,10 @@ export function getUnreadNotificationCount(userId: string): number {
 // ====== دوال مساعدة ======
 
 function generateId(): string {
-    return Math.random().toString(36).substring(2) + Date.now().toString(36);
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+        return crypto.randomUUID();
+    }
+    return Date.now().toString(36) + Math.random().toString(36).substring(2, 9);
 }
 
 // ====== بيانات وهمية للعرض ======

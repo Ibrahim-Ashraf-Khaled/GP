@@ -1,4 +1,5 @@
 'use client';
+
 import { useState } from 'react';
 import Link from 'next/link';
 import MyPropertyCard from '@/components/MyPropertyCard';
@@ -15,6 +16,7 @@ import { PropertyCategory, PropertyStatus, CATEGORY_AR } from '@/types';
 export default function MyPropertiesPage() {
     const { user } = useAuth();
     const { toast } = useToast();
+
     const { properties, loading, error, deleteProperty, updateStatus, refresh, deletingId } =
         useMyProperties(user?.id, {
             onSuccess: (msg) => toast.success(msg),
@@ -62,6 +64,7 @@ export default function MyPropertiesPage() {
 
     const displayedProperties = (() => {
         let list = properties;
+
         if (filter) {
             if (['available', 'rented'].includes(filter as string)) {
                 list = list.filter((p) => p.status === filter);
@@ -69,6 +72,7 @@ export default function MyPropertiesPage() {
                 list = list.filter((p) => p.category === filter);
             }
         }
+
         return [...list].sort((a, b) => {
             switch (sortBy) {
                 case 'oldest':
@@ -146,98 +150,4 @@ export default function MyPropertiesPage() {
                             <span className="material-symbols-outlined text-4xl text-red-400 mb-3">cloud_off</span>
                             <p className="text-gray-700 dark:text-gray-300 font-medium mb-1">تعذّر تحميل العقارات</p>
                             <p className="text-sm text-gray-400 mb-5">{error}</p>
-                            <button
-                                onClick={refresh}
-                                className="flex items-center gap-2 px-5 py-2 bg-white dark:bg-zinc-800 text-gray-700 dark:text-gray-300 rounded-xl border border-gray-200 dark:border-zinc-700 text-sm font-medium hover:bg-gray-50 dark:hover:bg-zinc-700 transition-colors"
-                            >
-                                <span className="material-symbols-outlined text-[18px]">refresh</span>
-                                إعادة المحاولة
-                            </button>
-                        </div>
-                    ) : properties.length === 0 ? (
-                        <EmptyState
-                            icon="home_work"
-                            title="لا توجد عقارات مضافة"
-                            subtitle="لم تقم بإضافة أي عقارات حتى الآن. ابدأ بإضافة عقارك الأول!"
-                            action={{ label: 'إضافة عقار جديد', href: '/add-property' }}
-                        />
-                    ) : (
-                        <>
-                            <div className="grid grid-cols-3 gap-3 mb-6">
-                                <StatCard label="إجمالي العقارات" value={properties.length} icon="home_work" color="blue" />
-                                <StatCard label="متاح للإيجار" value={availableCount} icon="check_circle" color="green" />
-                                <StatCard label="إجمالي المشاهدات" value={totalViews} icon="visibility" color="purple" />
-                            </div>
-
-                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
-                                <div className="flex gap-2 overflow-x-auto pb-2 sm:pb-0 no-scrollbar flex-1">
-                                    <FilterChip label="الكل" count={properties.length} active={!filter} onClick={() => setFilter(null)} />
-                                    <FilterChip label="متاح" count={availableCount} active={filter === 'available'} onClick={() => setFilter('available')} />
-                                    <FilterChip label="مؤجر" count={rentedCount} active={filter === 'rented'} onClick={() => setFilter('rented')} />
-                                    {uniqueCategories.map((cat) => (
-                                        <FilterChip key={cat} label={CATEGORY_AR[cat]} active={filter === cat} onClick={() => setFilter(cat)} />
-                                    ))}
-                                </div>
-                                <div className="flex gap-2 items-center shrink-0">
-                                    <select
-                                        value={sortBy}
-                                        onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
-                                        className="bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-gray-400 text-sm rounded-xl px-3 py-1.5 border-none outline-none cursor-pointer"
-                                    >
-                                        <option value="newest">الأحدث أولاً</option>
-                                        <option value="oldest">الأقدم أولاً</option>
-                                        <option value="views">الأكثر مشاهدة</option>
-                                        <option value="price_high">السعر: الأعلى</option>
-                                        <option value="price_low">السعر: الأقل</option>
-                                    </select>
-                                    <div className="flex bg-gray-100 dark:bg-zinc-800 rounded-xl p-1">
-                                        <button
-                                            onClick={() => setViewMode('list')}
-                                            className={'p-1.5 rounded-lg transition-colors ' + (viewMode === 'list' ? 'bg-white dark:bg-zinc-700 shadow-sm' : '')}
-                                        >
-                                            <span className="material-symbols-outlined text-[18px] text-gray-500">view_list</span>
-                                        </button>
-                                        <button
-                                            onClick={() => setViewMode('grid')}
-                                            className={'p-1.5 rounded-lg transition-colors ' + (viewMode === 'grid' ? 'bg-white dark:bg-zinc-700 shadow-sm' : '')}
-                                        >
-                                            <span className="material-symbols-outlined text-[18px] text-gray-500">grid_view</span>
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {isFilterEmpty ? (
-                                <EmptyState
-                                    icon="filter_list_off"
-                                    title="لا توجد نتائج"
-                                    subtitle="لا توجد عقارات تطابق الفلتر المحدد"
-                                    action={{ label: 'مسح الفلتر', onClick: () => setFilter(null) }}
-                                />
-                            ) : (
-                                <div className={viewMode === 'grid' ? 'grid grid-cols-1 sm:grid-cols-2 gap-4' : 'flex flex-col gap-4'}>
-                                    {displayedProperties.map((property) => (
-                                        <MyPropertyCard
-                                            key={property.id}
-                                            property={property}
-                                            onDelete={handleDelete}
-                                            onStatusChange={handleStatusChange}
-                                            isDeleting={deletingId === property.id}
-                                        />
-                                    ))}
-                                </div>
-                            )}
-                        </>
-                    )}
-                </div>
-
-                <Link
-                    href="/add-property"
-                    className="fixed bottom-24 left-4 z-50 sm:hidden flex items-center justify-center w-14 h-14 bg-primary text-white rounded-full shadow-xl shadow-primary/30 active:scale-95 transition-transform"
-                >
-                    <span className="material-symbols-outlined text-[28px]">add</span>
-                </Link>
-            </div>
-        </ProtectedRoute>
-    );
-}
+       
