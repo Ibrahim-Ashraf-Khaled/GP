@@ -1154,13 +1154,22 @@ export const supabaseService = {
     }): Promise<string> {
         if (IS_MOCK_MODE) return 'mock-conv-1';
 
-        const { data: existing } = await supabase
+        // Avoid duplicate rows when React Strict Mode triggers double renders or when two
+        // clients start a chat simultaneously. We first try to read the existing row (but
+        // tolerate the "no rows" error), then fall back to inserting, and finally handle
+        // the unique-constraint error by returning the existing id.
+        const { data: existing, error: fetchError } = await supabase
             .from('conversations')
             .select('id')
             .eq('property_id', params.propertyId)
             .eq('buyer_id', params.buyerId)
             .eq('owner_id', params.ownerId)
-            .single();
+            .maybeSingle();
+
+        // Any error other than "no rows" should surface instead of causing a blind insert.
+        if (fetchError && fetchError.code !== 'PGRST116') {
+            throw new Error(`فشل جلب المحادثة: ${fetchError.message}`);
+        }
 
         if (existing) return existing.id;
 
@@ -1174,7 +1183,24 @@ export const supabaseService = {
             .select('id')
             .single();
 
-        if (error) throw new Error(`ظپط´ظ„ ط¨ط¯ط، ط§ظ„ظ…ط­ط§ط¯ط«ط©: ${error.message}`);
+        // 23505 = unique_violation. If another request inserted the same row just before us,
+        // fetch and reuse that conversation instead of failing.
+        if (error) {
+            if (error.code === '23505') {
+                const { data: dup } = await supabase
+                    .from('conversations')
+                    .select('id')
+                    .eq('property_id', params.propertyId)
+                    .eq('buyer_id', params.buyerId)
+                    .eq('owner_id', params.ownerId)
+                    .maybeSingle();
+
+                if (dup?.id) return dup.id;
+            }
+
+            throw new Error(`فشل بدء المحادثة: ${error.message}`);
+        }
+
         return data.id;
     },
 
@@ -1927,4 +1953,5 @@ export const supabaseService = {
         return { error };
     }
 };
+
 

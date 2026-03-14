@@ -5,7 +5,6 @@ import "leaflet/dist/leaflet.css";
 import { Providers } from "./providers";
 import IOSInstallPrompt from "@/components/IOSInstallPrompt";
 import ChromeGate from "@/components/chrome/ChromeGate";
-import { ToastProvider } from "@/hooks/useToast";
 
 const notoSansArabic = Noto_Sans_Arabic({
   subsets: ["arabic"],
@@ -82,14 +81,12 @@ export default function RootLayout({
         />
       </head>
       <body className={`${notoSansArabic.variable} ${inter.variable} font-sans antialiased`}>
-        <ToastProvider>
-          <Providers>
-            <ChromeGate>
-              {children}
-            </ChromeGate>
-            <IOSInstallPrompt />
-          </Providers>
-        </ToastProvider>
+        <Providers>
+          <ChromeGate>
+            {children}
+          </ChromeGate>
+          <IOSInstallPrompt />
+        </Providers>
       </body>
     </html>
   );

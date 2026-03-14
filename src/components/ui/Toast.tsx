@@ -1,62 +1,27 @@
 'use client';
 
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { ToastProvider as CoreToastProvider, useToast as useCoreToast, ToastType } from '@/hooks/useToast';
 
-type ToastType = 'success' | 'error' | 'info';
+// Re-export the core provider so existing imports keep working.
+export const ToastProvider = CoreToastProvider;
 
-interface Toast {
-    id: string;
-    message: string;
-    type: ToastType;
-}
-
-interface ToastContextType {
-    showToast: (message: string, type?: ToastType) => void;
-}
-
-const ToastContext = createContext<ToastContextType | undefined>(undefined);
-
-export function ToastProvider({ children }: { children: ReactNode }) {
-    const [toasts, setToasts] = useState<Toast[]>([]);
+// Legacy-friendly hook that maps the old `showToast(message, type)` API
+// to the newer toast helpers provided by the core hook.
+export const useToast = () => {
+    const { toast } = useCoreToast();
 
     const showToast = (message: string, type: ToastType = 'info') => {
-        const id = Math.random().toString(36).substring(2, 9);
-        setToasts((prev) => [...prev, { id, message, type }]);
-
-        setTimeout(() => {
-            setToasts((prev) => prev.filter((t) => t.id !== id));
-        }, 3000);
+        switch (type) {
+            case 'success':
+                toast.success(message);
+                break;
+            case 'error':
+                toast.error(message);
+                break;
+            default:
+                toast.info(message);
+        }
     };
 
-    return (
-        <ToastContext.Provider value={{ showToast }}>
-            {children}
-            <div className="fixed bottom-4 left-4 z-50 flex flex-col gap-2 pointer-events-none">
-                {toasts.map((toast) => (
-                    <div
-                        key={toast.id}
-                        className={`pointer-events-auto flex items-center gap-2 px-4 py-3 rounded-lg shadow-lg text-white text-sm font-medium animate-in slide-in-from-left-5 fade-in duration-300 ${toast.type === 'success' ? 'bg-success' :
-                            toast.type === 'error' ? 'bg-error' :
-                                'bg-surface-dark'
-                            }`}
-                    >
-                        <span className="material-symbols-outlined text-[18px]">
-                            {toast.type === 'success' ? 'check_circle' :
-                                toast.type === 'error' ? 'error' :
-                                    'info'}
-                        </span>
-                        {toast.message}
-                    </div>
-                ))}
-            </div>
-        </ToastContext.Provider>
-    );
-}
-
-export const useToast = () => {
-    const context = useContext(ToastContext);
-    if (!context) {
-        throw new Error('useToast must be used within a ToastProvider');
-    }
-    return context;
+    return { showToast };
 };

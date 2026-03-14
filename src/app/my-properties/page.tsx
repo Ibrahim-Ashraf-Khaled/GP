@@ -105,31 +105,35 @@ export default function MyPropertiesPage() {
                         </nav>
                     </div>
 
-                    <div className="flex items-center justify-between mb-8">
-                        <div className="flex items-center gap-3">
-                            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">عقاراتي</h1>
-                            <span className="bg-blue-500/10 text-blue-500 text-sm font-bold px-3 py-1 rounded-full">
+                    {/* Sticky Floating Header */}
+                    <div className="sticky top-4 z-40 flex items-center justify-between mb-8 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-xl px-5 py-4 rounded-3xl shadow-sm border border-white/20 dark:border-white/5 transition-all">
+                        <div className="flex items-center gap-4">
+                            <h1 className="text-2xl font-black text-gray-900 dark:text-white tracking-tight">عقاراتي</h1>
+                            <span className="bg-primary/10 text-primary text-sm font-black px-3 py-1 rounded-full border border-primary/20 shadow-inner">
                                 {properties.length}
                             </span>
                         </div>
                         <div className="hidden sm:flex items-center gap-3">
                             <Link
                                 href="/"
-                                className="w-9 h-9 rounded-full bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 flex items-center justify-center text-gray-500 hover:text-primary transition-colors"
+                                className="w-10 h-10 rounded-2xl bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/5 flex items-center justify-center text-gray-500 hover:text-primary hover:scale-105 active:scale-95 transition-all"
+                                title="الرئيسية"
                             >
                                 <span className="material-symbols-outlined text-[20px]">home</span>
                             </Link>
                             <button
                                 onClick={() => window.history.back()}
-                                className="w-9 h-9 rounded-full bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 flex items-center justify-center text-gray-500 hover:text-primary transition-colors"
+                                className="w-10 h-10 rounded-2xl bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/5 flex items-center justify-center text-gray-500 hover:text-primary hover:scale-105 active:scale-95 transition-all"
+                                title="رجوع"
                             >
                                 <span className="material-symbols-outlined text-[20px]">arrow_forward</span>
                             </button>
+                            <div className="w-px h-6 bg-gray-200 dark:bg-white/10 mx-1"></div>
                             <Link
                                 href="/add-property"
-                                className="hidden sm:flex items-center gap-2 px-6 py-3 bg-primary text-white font-bold rounded-xl hover:bg-primary/90 transition-all shadow-lg shadow-primary/20"
+                                className="hidden sm:flex items-center gap-2 px-6 py-2.5 bg-primary text-white font-bold rounded-2xl hover:bg-primary/90 transition-all shadow-lg shadow-primary/30 hover:-translate-y-0.5 active:scale-95"
                             >
-                                <span className="material-symbols-outlined">add_circle</span>
+                                <span className="material-symbols-outlined text-[20px]">add_circle</span>
                                 <span>إضافة عقار</span>
                             </Link>
                         </div>
@@ -190,18 +194,18 @@ export default function MyPropertiesPage() {
                                         <option value="price_high">السعر: الأعلى</option>
                                         <option value="price_low">السعر: الأقل</option>
                                     </select>
-                                    <div className="flex bg-gray-100 dark:bg-zinc-800 rounded-xl p-1">
+                                    <div className="flex bg-gray-100 dark:bg-white/5 rounded-2xl p-1.5 shadow-inner">
                                         <button
                                             onClick={() => setViewMode('list')}
-                                            className={'p-1.5 rounded-lg transition-colors ' + (viewMode === 'list' ? 'bg-white dark:bg-zinc-700 shadow-sm' : '')}
+                                            className={'p-2 rounded-xl transition-all duration-300 ' + (viewMode === 'list' ? 'bg-white dark:bg-zinc-700 shadow-sm text-primary' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300')}
                                         >
-                                            <span className="material-symbols-outlined text-[18px] text-gray-500">view_list</span>
+                                            <span className="material-symbols-outlined text-[20px]">view_list</span>
                                         </button>
                                         <button
                                             onClick={() => setViewMode('grid')}
-                                            className={'p-1.5 rounded-lg transition-colors ' + (viewMode === 'grid' ? 'bg-white dark:bg-zinc-700 shadow-sm' : '')}
+                                            className={'p-2 rounded-xl transition-all duration-300 ' + (viewMode === 'grid' ? 'bg-white dark:bg-zinc-700 shadow-sm text-primary' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300')}
                                         >
-                                            <span className="material-symbols-outlined text-[18px] text-gray-500">grid_view</span>
+                                            <span className="material-symbols-outlined text-[20px]">grid_view</span>
                                         </button>
                                     </div>
                                 </div>
