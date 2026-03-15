@@ -1,6 +1,6 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import AuthForm from '../AuthForm';
 
 // Mock context
@@ -12,6 +12,10 @@ vi.mock('@/context/AuthContext', () => ({
 }));
 
 describe('AuthForm (Login)', () => {
+    afterEach(() => {
+        cleanup();
+    });
+
     beforeEach(() => {
         vi.clearAllMocks();
     });

@@ -50,8 +50,8 @@ export function PropertyCard({
 
     const checkFavoriteStatus = async () => {
         if (!user) return;
-        const favorites = await supabaseService.getFavorites(user.id);
-        setIsFavorite(favorites.includes(id));
+        const { data } = await supabaseService.getFavorites(user.id);
+        setIsFavorite(data.some((favorite) => favorite.id === id));
     };
 
     const handleFavoriteClick = async (e: React.MouseEvent) => {

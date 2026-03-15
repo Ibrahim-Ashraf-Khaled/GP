@@ -79,7 +79,7 @@ export default function ProfilePage() {
             try {
                 // NOTE: If possible, replace these with count-only queries inside supabaseService
                 // to avoid downloading long lists just to count them.
-                const [myProps, unlocked, favs] = await Promise.all([
+                const [myProps, unlocked, favoriteResult] = await Promise.all([
                     supabaseService.getProperties({ ownerId: u.id }),
                     supabaseService.getUnlockedProperties(u.id),
                     supabaseService.getFavorites(u.id),
@@ -90,7 +90,7 @@ export default function ProfilePage() {
                 setStats({
                     properties: Array.isArray(myProps) ? myProps.length : 0,
                     unlocked: Array.isArray(unlocked) ? unlocked.length : 0,
-                    favorites: Array.isArray(favs) ? favs.length : 0,
+                    favorites: Array.isArray(favoriteResult.data) ? favoriteResult.data.length : 0,
                 });
             } catch (e) {
                 console.error(e);

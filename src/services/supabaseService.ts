@@ -29,6 +29,245 @@ type TenantPropertyBookingRow = {
     created_at: string;
 };
 
+type UserBookingsRpcRow = {
+    booking_id: string;
+    booking_property_id: string;
+    booking_user_id: string;
+    start_date: string;
+    end_date: string;
+    total_amount: number;
+    status: string;
+    created_at: string;
+    tenant_name: string | null;
+    booking_type: 'tenant' | 'owner';
+    prop_id: string | null;
+    prop_title: string | null;
+    prop_images: string[] | null;
+    prop_area: string | null;
+    prop_owner_id: string | null;
+    prop_owner_name: string | null;
+    prop_owner_phone: string | null;
+    profile_id: string | null;
+    profile_full_name: string | null;
+    profile_avatar_url: string | null;
+};
+
+type FavoriteReferenceRow = {
+    property_id: string;
+    created_at: string;
+};
+
+type UserBookingsFallbackRow = {
+    id: string;
+    property_id: string;
+    user_id: string;
+    start_date: string;
+    end_date: string;
+    total_amount: number;
+    status: string;
+    created_at: string;
+    tenant_name: string | null;
+    property: {
+        id: string;
+        title: string | null;
+        images: string[] | null;
+        area: string | null;
+        owner_id: string | null;
+        owner_name: string | null;
+        owner_phone: string | null;
+    } | null;
+    user?: {
+        id: string | null;
+        full_name: string | null;
+        avatar_url: string | null;
+    } | null;
+};
+
+const FAVORITES_PROPERTY_SELECT = `
+    id,
+    owner_id,
+    title,
+    description,
+    price,
+    price_unit,
+    category,
+    status,
+    images,
+    location_lat,
+    location_lng,
+    address,
+    area,
+    bedrooms,
+    bathrooms,
+    floor_area,
+    floor_number,
+    features,
+    owner_phone,
+    owner_name,
+    is_verified,
+    views_count,
+    created_at,
+    updated_at
+`;
+
+function isMissingRpcFunctionError(error: any, functionName: string): boolean {
+    if (!error) return false;
+
+    const code = typeof error.code === 'string' ? error.code : '';
+    const message = typeof error.message === 'string' ? error.message : '';
+    const details = typeof error.details === 'string' ? error.details : '';
+    const hint = typeof error.hint === 'string' ? error.hint : '';
+
+    if (code === 'PGRST202') {
+        return true;
+    }
+
+    return [message, details, hint].some((value) => value.includes(functionName));
+}
+
+async function getFavoritesFallback(userId: string): Promise<{ data: PropertyRow[]; error: any }> {
+    const { data: favoritesData, error: favoritesError } = await supabase
+        .from('favorites')
+        .select('property_id, created_at')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
+
+    if (favoritesError) {
+        return { data: [], error: favoritesError };
+    }
+
+    const propertyIds = ((favoritesData || []) as FavoriteReferenceRow[]).map((row) => row.property_id);
+
+    if (propertyIds.length === 0) {
+        return { data: [], error: null };
+    }
+
+    const { data: propertiesData, error: propertiesError } = await supabase
+        .from('properties')
+        .select(FAVORITES_PROPERTY_SELECT)
+        .in('id', propertyIds);
+
+    if (propertiesError) {
+        return { data: [], error: propertiesError };
+    }
+
+    const propertiesById = new Map(
+        ((propertiesData || []) as PropertyRow[]).map((property) => [property.id, property])
+    );
+
+    const orderedProperties = propertyIds
+        .map((propertyId) => propertiesById.get(propertyId) || null)
+        .filter((property): property is PropertyRow => property !== null);
+
+    return { data: orderedProperties, error: null };
+}
+
+function mapFallbackBookingRow(
+    row: UserBookingsFallbackRow,
+    bookingType: 'tenant' | 'owner'
+) {
+    return {
+        id: row.id,
+        propertyId: row.property_id,
+        userId: row.user_id,
+        startDate: row.start_date,
+        endDate: row.end_date,
+        totalAmount: row.total_amount,
+        status: row.status,
+        createdAt: row.created_at,
+        tenantName: row.tenant_name,
+        bookingType,
+        property: {
+            id: row.property?.id || null,
+            title: row.property?.title || null,
+            images: row.property?.images || [],
+            area: row.property?.area || null,
+            ownerId: row.property?.owner_id || null,
+            ownerName: row.property?.owner_name || null,
+            ownerPhone: row.property?.owner_phone || null,
+        },
+        user: bookingType === 'owner'
+            ? {
+                id: row.user?.id || row.user_id,
+                fullName: row.user?.full_name || row.tenant_name,
+                avatarUrl: row.user?.avatar_url || null,
+            }
+            : null,
+    };
+}
+
+async function getUserBookingsFallback(userId: string): Promise<{ bookings: any[]; error: any }> {
+    const { data: tenantRows, error: tenantError } = await supabase
+        .from('bookings')
+        .select(`
+            id,
+            property_id,
+            user_id,
+            start_date,
+            end_date,
+            total_amount,
+            status,
+            created_at,
+            tenant_name,
+            property:properties (
+                id,
+                title,
+                images,
+                area,
+                owner_id,
+                owner_name,
+                owner_phone
+            )
+        `)
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
+
+    if (tenantError) {
+        return { bookings: [], error: tenantError };
+    }
+
+    const { data: ownerRows, error: ownerError } = await supabase
+        .from('bookings')
+        .select(`
+            id,
+            property_id,
+            user_id,
+            start_date,
+            end_date,
+            total_amount,
+            status,
+            created_at,
+            tenant_name,
+            property:properties!inner (
+                id,
+                title,
+                images,
+                area,
+                owner_id,
+                owner_name,
+                owner_phone
+            ),
+            user:profiles (
+                id,
+                full_name,
+                avatar_url
+            )
+        `)
+        .eq('property.owner_id', userId)
+        .order('created_at', { ascending: false });
+
+    if (ownerError) {
+        return { bookings: [], error: ownerError };
+    }
+
+    const bookings = [
+        ...((tenantRows || []) as UserBookingsFallbackRow[]).map((row) => mapFallbackBookingRow(row, 'tenant')),
+        ...((ownerRows || []) as UserBookingsFallbackRow[]).map((row) => mapFallbackBookingRow(row, 'owner')),
+    ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+    return { bookings, error: null };
+}
+
 function normalizeDateOnly(value: string): string | null {
     if (!value) return null;
 
@@ -579,22 +818,37 @@ export const supabaseService = {
     },
 
     // ====== ط§ظ„ظ…ظپط¶ظ„ط© ======
-    async getFavorites(userId: string): Promise<string[]> {
+    async getFavorites(userId: string): Promise<{ data: PropertyRow[]; error: any }> {
         if (IS_MOCK_MODE) {
-            return Array.from(_mockFavorites);
+            const favoriteProperties = Array.from(_mockFavorites)
+                .map((id) => MOCK_PROPERTIES.find((property) => property.id === id) || null)
+                .filter((property): property is PropertyRow => property !== null);
+
+            return { data: favoriteProperties, error: null };
         }
 
-        const { data, error } = await supabase
-            .from('favorites')
-            .select('property_id')
-            .eq('user_id', userId);
+        try {
+            const { data, error } = await supabase
+                .rpc('get_user_favorites', { uid: userId });
 
-        if (error) {
-            console.error('Error fetching favorites:', error);
-            return [];
+            if (error) {
+                if (isMissingRpcFunctionError(error, 'get_user_favorites')) {
+                    return await getFavoritesFallback(userId);
+                }
+
+                console.error('[getFavorites RPC Error]', error);
+                return { data: [], error };
+            }
+
+            return { data: (data || []) as PropertyRow[], error: null };
+        } catch (error) {
+            if (isMissingRpcFunctionError(error, 'get_user_favorites')) {
+                return await getFavoritesFallback(userId);
+            }
+
+            console.error('[getFavorites Unexpected Error]', error);
+            return { data: [], error };
         }
-
-        return data.map(f => f.property_id);
     },
 
     async toggleFavorite(userId: string, propertyId: string): Promise<boolean> {
@@ -1756,46 +2010,61 @@ export const supabaseService = {
     /**
      * ط¬ظ„ط¨ ط§ظ„ط­ط¬ظˆط²ط§طھ ط§ظ„ظˆط§ط±ط¯ط© ظˆط§ظ„طµط§ط¯ط±ط© (ظ„ظ„ظ…ط³طھط£ط¬ط± ظˆط§ظ„ظ…ط§ظ„ظƒ ظ…ط¹ط§ظ‹)
      */
-    async getUserBookings(userId: string): Promise<{ myBookings: any[], incomingRequests: any[], error: any }> {
+    async getUserBookings(userId: string): Promise<{ bookings: any[]; error: any }> {
         if (IS_MOCK_MODE) {
-            // will just return empty, page.tsx will fallback to initial constants
-            return { myBookings: [], incomingRequests: [], error: null };
+            return { bookings: [], error: null };
         }
 
         try {
-            // 1. My Bookings (as tenant)
-            const { data: myBookingsData, error: myError } = await supabase
-                .from('bookings')
-                .select(`
-                    id, property_id, user_id, start_date, end_date, total_amount, status, created_at,
-                    property:properties ( title, images, area, owner_id, owner_name, owner_phone )
-                `)
-                .eq('user_id', userId)
-                .order('created_at', { ascending: false });
+            const { data, error } = await supabase
+                .rpc('get_user_bookings', { uid: userId });
 
-            if (myError) throw myError;
+            if (error) {
+                if (isMissingRpcFunctionError(error, 'get_user_bookings')) {
+                    return await getUserBookingsFallback(userId);
+                }
 
-            // 2. Incoming Requests (as landlord)
-            const { data: incomingRequestsData, error: incomingError } = await supabase
-                .from('bookings')
-                .select(`
-                    id, property_id, user_id, start_date, end_date, total_amount, status, created_at, tenant_name,
-                    property:properties!inner ( title, images, area, owner_id ),
-                    user:profiles ( full_name, avatar_url )
-                `)
-                .eq('property.owner_id', userId)
-                .order('created_at', { ascending: false });
+                console.error('[getUserBookings RPC Error]', error);
+                return { bookings: [], error };
+            }
 
-            if (incomingError) throw incomingError;
+            const bookings = ((data || []) as UserBookingsRpcRow[]).map((row) => ({
+                id: row.booking_id,
+                propertyId: row.booking_property_id,
+                userId: row.booking_user_id,
+                startDate: row.start_date,
+                endDate: row.end_date,
+                totalAmount: row.total_amount,
+                status: row.status,
+                createdAt: row.created_at,
+                tenantName: row.tenant_name,
+                bookingType: row.booking_type,
+                property: {
+                    id: row.prop_id,
+                    title: row.prop_title,
+                    images: row.prop_images || [],
+                    area: row.prop_area,
+                    ownerId: row.prop_owner_id,
+                    ownerName: row.prop_owner_name,
+                    ownerPhone: row.prop_owner_phone,
+                },
+                user: row.booking_type === 'owner'
+                    ? {
+                        id: row.profile_id,
+                        fullName: row.profile_full_name,
+                        avatarUrl: row.profile_avatar_url,
+                    }
+                    : null,
+            }));
 
-            return {
-                myBookings: myBookingsData || [],
-                incomingRequests: incomingRequestsData || [],
-                error: null
-            };
+            return { bookings, error: null };
         } catch (error: any) {
-            console.error('Error in getUserBookings:', error);
-            return { myBookings: [], incomingRequests: [], error };
+            if (isMissingRpcFunctionError(error, 'get_user_bookings')) {
+                return await getUserBookingsFallback(userId);
+            }
+
+            console.error('[getUserBookings Unexpected Error]', error);
+            return { bookings: [], error };
         }
     },
 

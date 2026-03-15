@@ -11,11 +11,12 @@ import Link from 'next/link';
 export default function FavoritesPage() {
     const [favorites, setFavorites] = useState<Property[]>([]);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
     const { user, isAuthenticated, loading: authLoading } = useAuth();
 
     useEffect(() => {
         if (!authLoading && user) {
-            fetchFavorites();
+            void fetchFavorites();
         } else if (!authLoading && !user) {
             setLoading(false);
         }
@@ -24,23 +25,21 @@ export default function FavoritesPage() {
     const fetchFavorites = async () => {
         if (!user) return;
         setLoading(true);
-        try {
-            // 1. Get favorite IDs
-            const favoriteIds = await supabaseService.getFavorites(user.id);
+        setError(null);
 
-            // 2. Fetch property details
-            const properties = [];
-            for (const id of favoriteIds) {
-                const p = await supabaseService.getPropertyById(id);
-                if (p) properties.push(p);
+        try {
+            const { data, error: fetchError } = await supabaseService.getFavorites(user.id);
+
+            if (fetchError) {
+                throw fetchError;
             }
 
-            // 3. Map to Property type
-            const mappedProperties: Property[] = properties.map(fromPropertyRow);
-
+            const mappedProperties: Property[] = data.map(fromPropertyRow);
             setFavorites(mappedProperties);
         } catch (error) {
-            console.error('Error fetching favorites:', error);
+            console.error('[FavoritesPage Error]', error);
+            setError('فشل جلب المفضلات. يرجى المحاولة مرة أخرى.');
+            setFavorites([]);
         } finally {
             setLoading(false);
         }
@@ -89,6 +88,19 @@ export default function FavoritesPage() {
                         {[1, 2, 3].map(i => (
                             <div key={i} className="h-80 bg-gray-200 dark:bg-gray-800 rounded-3xl animate-pulse" />
                         ))}
+                    </div>
+                ) : error ? (
+                    <div className="text-center py-20 bg-red-50 dark:bg-red-900/10 rounded-[2.5rem]">
+                        <div className="w-20 h-20 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <span className="material-symbols-outlined text-4xl text-red-400">error</span>
+                        </div>
+                        <p className="text-red-500 font-medium">{error}</p>
+                        <button
+                            onClick={() => void fetchFavorites()}
+                            className="mt-4 px-6 py-2 bg-red-100 text-red-600 rounded-xl font-medium hover:bg-red-200 transition-colors"
+                        >
+                            إعادة المحاولة
+                        </button>
                     </div>
                 ) : favorites.length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

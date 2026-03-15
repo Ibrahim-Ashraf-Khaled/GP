@@ -243,9 +243,9 @@ export default function ClientPropertyDetails({ initialProperty }: ClientPropert
                 return;
             }
 
-            const favorites = await supabaseService.getFavorites(user.id);
+            const { data: favorites } = await supabaseService.getFavorites(user.id);
             if (mounted) {
-                setIsFavorite(favorites.includes(initialProperty.id));
+                setIsFavorite(favorites.some((favorite) => favorite.id === initialProperty.id));
             }
         };
         void loadFavoriteState();

@@ -177,46 +177,51 @@ export default function BookingsPage() {
         setMyBookings(INITIAL_MY_BOOKINGS);
         setIncomingRequests(INITIAL_INCOMING_REQUESTS);
       } else if (user) {
-        const {
-          myBookings: myDbBookings,
-          incomingRequests: incDbRequests,
-          error: fetchError,
-        } = await supabaseService.getUserBookings(user.id);
+        const { bookings, error: fetchError } = await supabaseService.getUserBookings(
+          user.id,
+        );
 
         if (fetchError) throw fetchError;
 
+        const tenantBookings = bookings.filter(
+          (booking: any) => booking.bookingType === "tenant",
+        );
+        const ownerBookings = bookings.filter(
+          (booking: any) => booking.bookingType === "owner",
+        );
+
         setMyBookings(
-          myDbBookings.map((booking: any) => ({
+          tenantBookings.map((booking: any) => ({
             id: booking.id,
-            propertyId: booking.property_id,
-            buyerId: booking.user_id,
-            ownerId: booking.property?.owner_id,
+            propertyId: booking.propertyId,
+            buyerId: booking.userId,
+            ownerId: booking.property?.ownerId,
             propertyTitle: booking.property?.title || "عقار غير معروف",
             propertyImage: booking.property?.images?.[0] || "",
             location: booking.property?.area || "غير محدد",
-            price: booking.total_amount,
-            startDate: booking.start_date,
-            endDate: booking.end_date,
+            price: booking.totalAmount,
+            startDate: booking.startDate,
+            endDate: booking.endDate,
             status: normalizeBookingStatus(booking.status),
-            ownerName: booking.property?.owner_name || "المالك",
+            ownerName: booking.property?.ownerName || "المالك",
           })),
         );
 
         setIncomingRequests(
-          incDbRequests.map((booking: any) => ({
+          ownerBookings.map((booking: any) => ({
             id: booking.id,
-            propertyId: booking.property_id,
-            buyerId: booking.user_id,
-            ownerId: booking.property?.owner_id,
+            propertyId: booking.propertyId,
+            buyerId: booking.userId,
+            ownerId: booking.property?.ownerId,
             propertyTitle: booking.property?.title || "عقار غير معروف",
             propertyImage: booking.property?.images?.[0] || "",
             location: booking.property?.area || "غير محدد",
-            price: booking.total_amount,
-            startDate: booking.start_date,
-            endDate: booking.end_date,
+            price: booking.totalAmount,
+            startDate: booking.startDate,
+            endDate: booking.endDate,
             status: normalizeBookingStatus(booking.status),
-            guestName: booking.tenant_name || booking.user?.full_name || "ضيف",
-            guestAvatar: booking.user?.avatar_url || "",
+            guestName: booking.tenantName || booking.user?.fullName || "ضيف",
+            guestAvatar: booking.user?.avatarUrl || "",
           })),
         );
       }

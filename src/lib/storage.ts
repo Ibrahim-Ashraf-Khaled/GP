@@ -158,15 +158,43 @@ export async function getUserPropertiesFromSupabase(userId: string): Promise<Pro
     try {
         const { data, error } = await supabase
             .from('properties')
-            .select('*')
+            .select(`
+                id,
+                owner_id,
+                title,
+                description,
+                price,
+                price_unit,
+                category,
+                status,
+                images,
+                address,
+                area,
+                bedrooms,
+                bathrooms,
+                floor_area,
+                floor_number,
+                features,
+                owner_phone,
+                owner_name,
+                is_verified,
+                views_count,
+                created_at,
+                updated_at,
+                location_lat,
+                location_lng
+            `)
             .eq('owner_id', userId)
             .order('created_at', { ascending: false });
 
-        if (error) throw error;
+        if (error) {
+            console.error('[getUserPropertiesFromSupabase Error]', error);
+            throw new Error(`فشل جلب عقارات المستخدم: ${error.message}`);
+        }
 
         return data ? data.map(convertPropertyFromDB) : [];
     } catch (error) {
-        console.error('Error fetching user properties from Supabase:', error);
+        console.error('[getUserPropertiesFromSupabase Unexpected]', error);
         throw error;
     }
 }
